@@ -3,6 +3,7 @@ import logging
 import os.path
 
 from fundrive.core import BaseDrive
+from funutil.cache import cached_property
 
 logger = logging.getLogger("funtable")
 
@@ -16,7 +17,7 @@ class DriveTable:
         self._fid_meta = None
         self._fid_meta_par = None
 
-    @property
+    @cached_property
     def __local_meta_path(self):
         cache_dir = f"{os.environ['HOME']}/.cache/fundrive/table/{self.table_fid}"
         os.makedirs(cache_dir, exist_ok=True)
