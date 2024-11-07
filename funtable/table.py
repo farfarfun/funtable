@@ -4,8 +4,8 @@ import os.path
 
 from fundrive.core import BaseDrive
 from funutil.cache import cached_property
-
-logger = logging.getLogger("funtable")
+from funutil import getLogger
+logger = getLogger("funtable")
 
 
 class DriveTable:
