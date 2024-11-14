@@ -1,10 +1,10 @@
 import json
-import logging
 import os.path
 
 from fundrive.core import BaseDrive
-from funutil.cache import cached_property
 from funutil import getLogger
+from funutil.cache import cached_property
+
 logger = getLogger("funtable")
 
 
@@ -27,7 +27,6 @@ class DriveTable:
     def meta_path(self):
         if len(self._fid_par_dict) == 0:
             self.update_partition_dict()
-
         return self._fid_meta
 
     def update_partition_dict(self):
@@ -50,9 +49,10 @@ class DriveTable:
         if partition in self._fid_par_dict.keys():
             fid = self._fid_par_dict[partition]
         else:
-            logging.info(f" partition={partition} not exists,create it.")
+            logger.info(f" partition={partition} not exists,create it.")
             fid = self.drive.mkdir(fid=self.table_fid, name=partition)
             self.update_partition_dict()
+        logger.info(f"upload file={file} partition={partition} fid={fid}")
         self.drive.upload_file(fid=fid, local_path=file, overwrite=overwrite)
 
     def update_partition_meta(self, refresh=False, *args, **kwargs):
