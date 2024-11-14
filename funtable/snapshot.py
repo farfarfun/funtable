@@ -5,7 +5,7 @@ from fundrive.core import BaseDrive
 from funfile.compress import tarfile
 from funutil import getLogger
 
-from funtable import DriveTable
+from .table import DriveTable
 
 logger = getLogger("funtable")
 
