@@ -12,9 +12,6 @@ from datetime import datetime
 from typing import Dict, Optional, Union
 
 from funutil import getLogger
-from interfaces import (
-    KeyError as StoreKeyError,
-)
 from tinydb import Query, TinyDB
 
 from .interfaces import (
@@ -26,6 +23,9 @@ from .interfaces import (
     StoreNotFoundError,
     StoreValue,
     StoreValueError,
+)
+from .interfaces import (
+    KeyError as StoreKeyError,
 )
 
 logger = getLogger("funkv")
