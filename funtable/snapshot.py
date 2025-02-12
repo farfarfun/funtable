@@ -34,7 +34,11 @@ class DriveSnapshot:
     def update(self, file_path, partition=None, *args, **kwargs):
         gz_path = self._tar_path(file_path)
         tarfile.file_entar(file_path, gz_path)
-        self.table.upload(gz_path, partition=partition or datetime.now().strftime("%Y%m%d%H%M%S"), overwrite=True)
+        self.table.upload(
+            gz_path,
+            partition=partition or datetime.now().strftime("%Y%m%d%H%M%S"),
+            overwrite=True,
+        )
         os.remove(gz_path)
         self.delete_outed_version()
 
