@@ -12,12 +12,11 @@ import time
 from typing import Dict, Optional, Union
 
 from funutil import getLogger
+
 from .interface import (
     BaseDB,
     BaseKKVTable,
     BaseKVTable,
-    StoreKey,
-    StoreName,
     StoreNotFoundError,
     StoreValue,
     StoreValueError,
@@ -106,11 +105,10 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
         if not isinstance(value, dict):
             raise StoreValueError("Value must be dict type")
 
-    def set(self, key: StoreKey, value: StoreValue) -> None:
+    def set(self, key: str, value: StoreValue) -> None:
         try:
             self._validate_key(key)
             self._validate_value(value)
-            logger.debug(f"setting KV pair: key={key}")
             value_json = json.dumps(value)
             self._execute(
                 f"INSERT OR REPLACE INTO {self.table_name} (key, value) VALUES (?, ?)",
@@ -120,28 +118,27 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
             logger.error(f"failed to set KV pair: {str(e)}")
             raise
 
-    def get(self, key: StoreKey) -> Optional[StoreValue]:
-        logger.debug(f"getting value for key={key}")
+    def get(self, key: str) -> Optional[StoreValue]:
         cursor = self._execute(
             f"SELECT value FROM {self.table_name} WHERE key = ?", (key,)
         )
         result = cursor.fetchone()
         return json.loads(result[0]) if result else None
 
-    def delete(self, key: StoreKey) -> bool:
+    def delete(self, key: str) -> bool:
         logger.debug(f"deleting key={key}")
         cursor = self._execute(f"DELETE FROM {self.table_name} WHERE key = ?", (key,))
         return cursor.rowcount > 0
 
-    def list_keys(self) -> list[StoreKey]:
+    def list_keys(self) -> list[str]:
         cursor = self._execute(f"SELECT key FROM {self.table_name}")
-        return [StoreKey(row[0]) for row in cursor.fetchall()]
+        return [row[0] for row in cursor.fetchall()]
 
-    def list_all(self) -> Dict[StoreKey, StoreValue]:
+    def list_all(self) -> Dict[str, StoreValue]:
         cursor = self._execute(f"SELECT key, value FROM {self.table_name}")
-        return {StoreKey(row[0]): json.loads(row[1]) for row in cursor.fetchall()}
+        return {row[0]: json.loads(row[1]) for row in cursor.fetchall()}
 
-    def batch_set(self, items: Dict[StoreKey, StoreValue]) -> None:
+    def batch_set(self, items: Dict[str, StoreValue]) -> None:
         """批量设置键值对"""
         with self.connection:
             cursor = self.connection.cursor()
@@ -150,7 +147,7 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
                 [(k, json.dumps(v)) for k, v in items.items()],
             )
 
-    def batch_delete(self, keys: list[StoreKey]) -> int:
+    def batch_delete(self, keys: list[str]) -> int:
         """批量删除键值对"""
         with self.connection:
             cursor = self.connection.cursor()
@@ -197,7 +194,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
         if not isinstance(value, dict):
             raise StoreValueError("Value must be dict type")
 
-    def set(self, pkey: StoreKey, skey: StoreKey, value: StoreValue) -> None:
+    def set(self, pkey: str, skey: str, value: StoreValue) -> None:
         try:
             self._validate_key(pkey)
             self._validate_key(skey)
@@ -212,7 +209,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
             logger.error(f"failed to set KKV pair: {str(e)}")
             raise
 
-    def get(self, pkey: StoreKey, skey: StoreKey) -> Optional[StoreValue]:
+    def get(self, pkey: str, skey: str) -> Optional[StoreValue]:
         logger.debug(f"getting value for pkey={pkey}, skey={skey}")
         cursor = self._execute(
             f"SELECT value FROM {self.table_name} WHERE key1 = ? AND key2 = ?",
@@ -221,7 +218,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
         result = cursor.fetchone()
         return json.loads(result[0]) if result else None
 
-    def delete(self, pkey: StoreKey, skey: StoreKey) -> bool:
+    def delete(self, pkey: str, skey: str) -> bool:
         logger.debug(f"deleting pkey={pkey}, skey={skey}")
         cursor = self._execute(
             f"DELETE FROM {self.table_name} WHERE key1 = ? AND key2 = ?",
@@ -229,24 +226,24 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
         )
         return cursor.rowcount > 0
 
-    def list_pkeys(self) -> list[StoreKey]:
+    def list_pkeys(self) -> list[str]:
         cursor = self._execute(f"SELECT DISTINCT key1 FROM {self.table_name}")
-        return [StoreKey(row[0]) for row in cursor.fetchall()]
+        return [row[0] for row in cursor.fetchall()]
 
-    def list_skeys(self, pkey: StoreKey) -> list[StoreKey]:
+    def list_skeys(self, pkey: str) -> list[str]:
         cursor = self._execute(
             f"SELECT key2 FROM {self.table_name} WHERE key1 = ?", (pkey,)
         )
-        return [StoreKey(row[0]) for row in cursor.fetchall()]
+        return [row[0] for row in cursor.fetchall()]
 
-    def list_all(self) -> Dict[StoreKey, Dict[StoreKey, StoreValue]]:
+    def list_all(self) -> Dict[str, Dict[str, StoreValue]]:
         cursor = self._execute(f"SELECT key1, key2, value FROM {self.table_name}")
-        result: Dict[StoreKey, Dict[StoreKey, StoreValue]] = {}
+        result: Dict[str, Dict[str, StoreValue]] = {}
         for row in cursor.fetchall():
             key1, key2, value_json = row
-            if StoreKey(key1) not in result:
-                result[StoreKey(key1)] = {}
-            result[StoreKey(key1)][StoreKey(key2)] = json.loads(value_json)
+            if key1 not in result:
+                result[key1] = {}
+            result[key1][key2] = json.loads(value_json)
         return result
 
     def begin_transaction(self) -> None:
@@ -261,7 +258,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
         """回滚事务"""
         self._execute("ROLLBACK")
 
-    def batch_set(self, items: Dict[StoreKey, Dict[StoreKey, StoreValue]]) -> None:
+    def batch_set(self, items: Dict[str, Dict[str, StoreValue]]) -> None:
         """批量设置键值对"""
         with self.connection:
             cursor = self.connection.cursor()
@@ -275,7 +272,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
                 values,
             )
 
-    def batch_delete(self, items: list[tuple[StoreKey, StoreKey]]) -> int:
+    def batch_delete(self, items: list[tuple[str, str]]) -> int:
         """批量删除键值对"""
         with self.connection:
             cursor = self.connection.cursor()
@@ -307,7 +304,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
             """
         )
 
-    def _add_table_info(self, table_name: StoreName, table_type: str) -> None:
+    def _add_table_info(self, table_name: str, table_type: str) -> None:
         """添加或更新存储表信息
 
         如果表已存在，则更新其信息；如果不存在，则添加新记录。
@@ -324,14 +321,14 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
             (table_name, table_type),
         )
 
-    def _remove_table_info(self, table_name: StoreName) -> None:
+    def _remove_table_info(self, table_name: str) -> None:
         """删除存储表信息"""
         self._execute(
             f"DELETE FROM {self.TABLE_INFO_TABLE} WHERE name = ?",
             (table_name,),
         )
 
-    def _get_table_type(self, table_name: StoreName) -> str:
+    def _get_table_type(self, table_name: str) -> str:
         """获取存储表类型"""
         cursor = self._execute(
             f"SELECT type FROM {self.TABLE_INFO_TABLE} WHERE name = ?",
@@ -360,7 +357,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
                 "Table name must start with a letter and contain only letters, numbers and underscores"
             )
 
-    def create_kv_table(self, table_name: StoreName) -> None:
+    def create_kv_table(self, table_name: str) -> None:
         self._validate_table_name(table_name)
         self._execute(
             """
@@ -373,7 +370,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         self._add_table_info(table_name, "kv")
         logger.success(f"created KV table: {table_name} success")
 
-    def create_kkv_table(self, table_name: StoreName) -> None:
+    def create_kkv_table(self, table_name: str) -> None:
         self._validate_table_name(table_name)
         self._execute(
             """
@@ -388,7 +385,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         self._add_table_info(table_name, "kkv")
         logger.success(f"created KKV table: {table_name} success")
 
-    def get_table(self, table_name: StoreName) -> Union[BaseKVTable, BaseKKVTable]:
+    def get_table(self, table_name: str) -> Union[BaseKVTable, BaseKKVTable]:
         self._ensure_table_exists(table_name)
         table_type = self._get_table_type(table_name)
         if table_type == "kv":
@@ -396,16 +393,16 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         else:
             return SQLiteKKVTable(self.db_path, table_name)
 
-    def list_tables(self) -> Dict[StoreName, str]:
+    def list_tables(self) -> Dict[str, str]:
         cursor = self._execute(
             f"""
             SELECT name, type FROM {self.TABLE_INFO_TABLE}
             ORDER BY name
             """
         )
-        return {StoreName(row[0]): row[1] for row in cursor.fetchall()}
+        return {row[0]: row[1] for row in cursor.fetchall()}
 
-    def drop_table(self, table_name: StoreName) -> None:
+    def drop_table(self, table_name: str) -> None:
         self._ensure_table_exists(table_name)
         self._execute(f"DROP TABLE IF EXISTS {table_name}")
         self._remove_table_info(table_name)

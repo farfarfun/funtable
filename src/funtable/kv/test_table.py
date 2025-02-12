@@ -5,8 +5,6 @@ from typing import Dict
 from funutil import getLogger
 
 from .interface import (
-    StoreKey,
-    StoreName,
     StoreNotFoundError,
     StoreValue,
     StoreValueError,
@@ -51,7 +49,7 @@ class TestSQLiteStore(unittest.TestCase):
         2. 检查表信息是否正确记录
         3. 删除表并验证删除成功
         """
-        table_name = StoreName("test_kv")
+        table_name = "test_kv"
         logger.info(f"创建KV表: {table_name}")
         self.store.create_kv_table(table_name)
 
@@ -66,7 +64,7 @@ class TestSQLiteStore(unittest.TestCase):
 
     def test_create_and_drop_kkv_table(self):
         """测试创建和删除KKV表"""
-        table_name = StoreName("test_kkv")
+        table_name = "test_kkv"
         logger.info(f"创建KKV表: {table_name}")
         self.store.create_kkv_table(table_name)
 
@@ -85,7 +83,7 @@ class TestSQLiteStore(unittest.TestCase):
         for name in invalid_names:
             logger.info(f"测试无效表名: {name}")
             with self.assertRaises(StoreValueError):
-                self.store.create_kv_table(StoreName(name))
+                self.store.create_kv_table(name)
 
     def test_kv_table_operations(self):
         """测试KV表的基本操作
@@ -102,12 +100,12 @@ class TestSQLiteStore(unittest.TestCase):
         - 数据的完整性
         - 操作的原子性
         """
-        table_name = StoreName("test_kv")
+        table_name = "test_kv"
         self.store.create_kv_table(table_name)
         kv_table = self.store.get_table(table_name)
 
         # 测试设置和获取
-        key = StoreKey("test_key")
+        key = "test_key"
         value = {"name": "test", "value": 123}
         logger.info(f"设置KV: key={key}, value={value}")
         kv_table.set(key, value)
@@ -121,9 +119,9 @@ class TestSQLiteStore(unittest.TestCase):
         self.assertIsNone(kv_table.get(key))
 
         # 测试列表操作
-        test_data: Dict[StoreKey, StoreValue] = {
-            StoreKey("key1"): {"name": "test1"},
-            StoreKey("key2"): {"name": "test2"},
+        test_data: Dict[str, StoreValue] = {
+            "key1": {"name": "test1"},
+            "key2": {"name": "test2"},
         }
         for k, v in test_data.items():
             kv_table.set(k, v)
@@ -152,13 +150,13 @@ class TestSQLiteStore(unittest.TestCase):
         - 数据的层级结构
         - 复杂数据的完整性
         """
-        table_name = StoreName("test_kkv")
+        table_name = "test_kkv"
         self.store.create_kkv_table(table_name)
         kkv_table = self.store.get_table(table_name)
 
         # 测试设置和获取
-        pkey = StoreKey("user1")
-        skey = StoreKey("profile")
+        pkey = "user1"
+        skey = "profile"
         value = {"name": "test", "age": 25}
         logger.info(f"设置KKV: pkey={pkey}, skey={skey}, value={value}")
         kkv_table.set(pkey, skey, value)
@@ -173,11 +171,11 @@ class TestSQLiteStore(unittest.TestCase):
 
         # 测试列表操作
         test_data = {
-            StoreKey("user1"): {
-                StoreKey("profile"): {"name": "test1"},
-                StoreKey("settings"): {"theme": "dark"},
+            "user1": {
+                "profile": {"name": "test1"},
+                "settings": {"theme": "dark"},
             },
-            StoreKey("user2"): {StoreKey("profile"): {"name": "test2"}},
+            "user2": {"profile": {"name": "test2"}},
         }
         for pk, sv in test_data.items():
             for sk, v in sv.items():
@@ -187,8 +185,8 @@ class TestSQLiteStore(unittest.TestCase):
         logger.info(f"主键列表: {pkeys}")
         self.assertEqual(len(pkeys), 2)
 
-        skeys = kkv_table.list_skeys(StoreKey("user1"))
-        logger.info(f"user1的次键列表: {skeys}")
+        skeys = kkv_table.list_skeys(pkey)
+        logger.info(f"{pkey}的次键列表: {skeys}")
         self.assertEqual(len(skeys), 2)
 
         all_data = kkv_table.list_all()
@@ -243,7 +241,7 @@ class TestTinyDBStore(unittest.TestCase):
 
     def test_create_and_drop_kv_table(self):
         """测试创建和删除KV表"""
-        table_name = StoreName("test_kv")
+        table_name = "test_kv"
         logger.info(f"创建KV表: {table_name}")
         self.store.create_kv_table(table_name)
 
@@ -258,7 +256,7 @@ class TestTinyDBStore(unittest.TestCase):
 
     def test_create_and_drop_kkv_table(self):
         """测试创建和删除KKV表"""
-        table_name = StoreName("test_kkv")
+        table_name = "test_kkv"
         logger.info(f"创建KKV表: {table_name}")
         self.store.create_kkv_table(table_name)
 
@@ -277,7 +275,7 @@ class TestTinyDBStore(unittest.TestCase):
         for name in invalid_names:
             logger.info(f"测试无效表名: {name}")
             with self.assertRaises(StoreValueError):
-                self.store.create_kv_table(StoreName(name))
+                self.store.create_kv_table(name)
 
     def test_table_not_found(self):
         """测试访问不存在的表
@@ -286,19 +284,19 @@ class TestTinyDBStore(unittest.TestCase):
         1. 访问不存在的表时抛出正确的异常
         2. 异常信息包含正确的表名
         """
-        table_name = StoreName("non_existent")
+        table_name = "non_existent"
         logger.info(f"尝试访问不存在的表: {table_name}")
         with self.assertRaises(StoreNotFoundError):
             self.store.get_table(table_name)
 
     def test_kv_table_operations(self):
         """测试KV表的基本操作"""
-        table_name = StoreName("test_kv")
+        table_name = "test_kv"
         self.store.create_kv_table(table_name)
         kv_table = self.store.get_table(table_name)
 
         # 测试设置和获取
-        key = StoreKey("test_key")
+        key = "test_key"
         value = {"name": "test", "value": 123}
         logger.info(f"设置KV: key={key}, value={value}")
         kv_table.set(key, value)
@@ -312,9 +310,9 @@ class TestTinyDBStore(unittest.TestCase):
         self.assertIsNone(kv_table.get(key))
 
         # 测试列表操作
-        test_data: Dict[StoreKey, StoreValue] = {
-            StoreKey("key1"): {"name": "test1"},
-            StoreKey("key2"): {"name": "test2"},
+        test_data: Dict[str, StoreValue] = {
+            "key1": {"name": "test1"},
+            "key2": {"name": "test2"},
         }
         for k, v in test_data.items():
             kv_table.set(k, v)
@@ -329,13 +327,13 @@ class TestTinyDBStore(unittest.TestCase):
 
     def test_kkv_table_operations(self):
         """测试KKV表的基本操作"""
-        table_name = StoreName("test_kkv")
+        table_name = "test_kkv"
         self.store.create_kkv_table(table_name)
         kkv_table = self.store.get_table(table_name)
 
         # 测试设置和获取
-        pkey = StoreKey("user1")
-        skey = StoreKey("profile")
+        pkey = "user1"
+        skey = "profile"
         value = {"name": "test", "age": 25}
         logger.info(f"设置KKV: pkey={pkey}, skey={skey}, value={value}")
         kkv_table.set(pkey, skey, value)
@@ -350,11 +348,11 @@ class TestTinyDBStore(unittest.TestCase):
 
         # 测试列表操作
         test_data = {
-            StoreKey("user1"): {
-                StoreKey("profile"): {"name": "test1"},
-                StoreKey("settings"): {"theme": "dark"},
+            "user1": {
+                "profile": {"name": "test1"},
+                "settings": {"theme": "dark"},
             },
-            StoreKey("user2"): {StoreKey("profile"): {"name": "test2"}},
+            "user2": {"profile": {"name": "test2"}},
         }
         for pk, sv in test_data.items():
             for sk, v in sv.items():
@@ -364,8 +362,8 @@ class TestTinyDBStore(unittest.TestCase):
         logger.info(f"主键列表: {pkeys}")
         self.assertEqual(len(pkeys), 2)
 
-        skeys = kkv_table.list_skeys(StoreKey("user1"))
-        logger.info(f"user1的次键列表: {skeys}")
+        skeys = kkv_table.list_skeys(pkey)
+        logger.info(f"{pkey}的次键列表: {skeys}")
         self.assertEqual(len(skeys), 2)
 
         all_data = kkv_table.list_all()

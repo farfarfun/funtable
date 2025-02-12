@@ -18,8 +18,6 @@ from .interface import (
     BaseDB,
     BaseKKVTable,
     BaseKVTable,
-    StoreKey,
-    StoreName,
     StoreNotFoundError,
     StoreValue,
     StoreValueError,
@@ -91,22 +89,20 @@ class TinyDBKVTable(TinyDBBase, BaseKVTable):
         if not isinstance(value, dict):
             raise StoreValueError("Value must be dict type")
 
-    def set(self, key: StoreKey, value: StoreValue) -> None:
+    def set(self, key: str, value: StoreValue) -> None:
         try:
-            self._validate_key(str(key))
+            self._validate_key(key)
             self._validate_value(value)
-            logger.debug(f"setting KV pair: key={key}")
             self.table.upsert(
-                {"key": str(key), "value": value},
-                self.query.key == str(key),
+                {"key": key, "value": value},
+                self.query.key == key,
             )
-            # 更新缓存
             self._cache[key] = (time.time(), value)
         except (StoreKeyError, StoreValueError) as e:
             logger.error(f"failed to set KV pair: {str(e)}")
             raise
 
-    def get(self, key: StoreKey) -> Optional[StoreValue]:
+    def get(self, key: str) -> Optional[StoreValue]:
         """获取键的值
 
         Args:
@@ -129,7 +125,7 @@ class TinyDBKVTable(TinyDBBase, BaseKVTable):
             self._cache[key] = (time.time(), result["value"])
         return result["value"] if result else None
 
-    def delete(self, key: StoreKey) -> bool:
+    def delete(self, key: str) -> bool:
         """删除键值对
 
         Args:
@@ -144,21 +140,21 @@ class TinyDBKVTable(TinyDBBase, BaseKVTable):
             del self._cache[key]
         return bool(self.table.remove(self.query.key == key))
 
-    def list_keys(self) -> list[StoreKey]:
+    def list_keys(self) -> list[str]:
         """获取所有键列表
 
         Returns:
             包含所有键的列表
         """
-        return [StoreKey(doc["key"]) for doc in self.table.all()]
+        return [doc["key"] for doc in self.table.all()]
 
-    def list_all(self) -> Dict[StoreKey, StoreValue]:
+    def list_all(self) -> Dict[str, StoreValue]:
         """获取所有键值对数据
 
         Returns:
             包含所有键值对的字典，格式为 {key: value_dict}
         """
-        return {StoreKey(doc["key"]): doc["value"] for doc in self.table.all()}
+        return {doc["key"]: doc["value"] for doc in self.table.all()}
 
     def begin_transaction(self) -> None:
         """TinyDB 不支持真正的事务，这里只是为了兼容接口"""
@@ -199,21 +195,21 @@ class TinyDBKKVTable(TinyDBBase, BaseKKVTable):
         if not isinstance(value, dict):
             raise StoreValueError("Value must be dict type")
 
-    def set(self, pkey: StoreKey, skey: StoreKey, value: StoreValue) -> None:
+    def set(self, pkey: str, skey: str, value: StoreValue) -> None:
         try:
-            self._validate_key(str(pkey))
-            self._validate_key(str(skey))
+            self._validate_key(pkey)
+            self._validate_key(skey)
             self._validate_value(value)
             logger.debug(f"setting KKV pair: pkey={pkey}, skey={skey}")
             self.table.upsert(
-                {"key1": str(pkey), "key2": str(skey), "value": value},
-                (self.query.key1 == str(pkey)) & (self.query.key2 == str(skey)),
+                {"key1": pkey, "key2": skey, "value": value},
+                (self.query.key1 == pkey) & (self.query.key2 == skey),
             )
         except (StoreKeyError, StoreValueError) as e:
             logger.error(f"failed to set KKV pair: {str(e)}")
             raise
 
-    def get(self, pkey: StoreKey, skey: StoreKey) -> Optional[StoreValue]:
+    def get(self, pkey: str, skey: str) -> Optional[StoreValue]:
         """获取键的值
 
         Args:
@@ -224,12 +220,10 @@ class TinyDBKKVTable(TinyDBBase, BaseKKVTable):
             如果键存在，返回对应的字典值；如果不存在，返回None
         """
         logger.debug(f"getting value for pkey={pkey}, skey={skey}")
-        result = self.table.get(
-            (self.query.key1 == str(pkey)) & (self.query.key2 == str(skey))
-        )
+        result = self.table.get((self.query.key1 == pkey) & (self.query.key2 == skey))
         return result["value"] if result else None
 
-    def delete(self, pkey: StoreKey, skey: StoreKey) -> bool:
+    def delete(self, pkey: str, skey: str) -> bool:
         """删除键值对
 
         Args:
@@ -241,21 +235,19 @@ class TinyDBKKVTable(TinyDBBase, BaseKKVTable):
         """
         logger.debug(f"deleting pkey={pkey}, skey={skey}")
         return bool(
-            self.table.remove(
-                (self.query.key1 == str(pkey)) & (self.query.key2 == str(skey))
-            )
+            self.table.remove((self.query.key1 == pkey) & (self.query.key2 == skey))
         )
 
-    def list_pkeys(self) -> list[StoreKey]:
+    def list_pkeys(self) -> list[str]:
         """获取所有第一级键列表
 
         Returns:
             包含所有第一级键的列表
         """
-        keys = {StoreKey(doc["key1"]) for doc in self.table.all()}
+        keys = {doc["key1"] for doc in self.table.all()}
         return list(keys)
 
-    def list_skeys(self, pkey: StoreKey) -> list[StoreKey]:
+    def list_skeys(self, pkey: str) -> list[str]:
         """获取指定第一级键下的所有第二级键列表
 
         Args:
@@ -264,21 +256,18 @@ class TinyDBKKVTable(TinyDBBase, BaseKKVTable):
         Returns:
             包含所有第二级键的列表
         """
-        return [
-            StoreKey(doc["key2"])
-            for doc in self.table.search(self.query.key1 == str(pkey))
-        ]
+        return [doc["key2"] for doc in self.table.search(self.query.key1 == pkey)]
 
-    def list_all(self) -> Dict[StoreKey, Dict[StoreKey, StoreValue]]:
+    def list_all(self) -> Dict[str, Dict[str, StoreValue]]:
         """获取所有键值对数据
 
         Returns:
             包含所有键值对的字典，格式为 {key1: {key2: value_dict}}
         """
-        result: Dict[StoreKey, Dict[StoreKey, StoreValue]] = {}
+        result: Dict[str, Dict[str, StoreValue]] = {}
         for doc in self.table.all():
-            pkey = StoreKey(doc["key1"])
-            skey = StoreKey(doc["key2"])
+            pkey = doc["key1"]
+            skey = doc["key2"]
             if pkey not in result:
                 result[pkey] = {}
             result[pkey][skey] = doc["value"]
@@ -312,32 +301,21 @@ class TinyDBStore(TinyDBBase, BaseDB):
             db = TinyDB(self._table_info_path)
             db.close()
 
-    def _add_table_info(self, table_name: StoreName, table_type: str) -> None:
-        """添加或更新存储表信息
-
-        如果表已存在，则更新其信息；如果不存在，则添加新记录。
-
-        Args:
-            table_name: 存储表名
-            table_type: 存储表类型 ("kv" 或 "kkv")
-        """
-        # 使用 upsert 操作，如果记录存在则更新，不存在则插入
+    def _add_table_info(self, table_name: str, table_type: str) -> None:
         self.db.table(self.TABLE_INFO_TABLE).upsert(
             {
                 "name": table_name,
                 "type": table_type,
                 "created_at": str(datetime.now()),
-                "updated_at": str(datetime.now()),  # 添加更新时间字段
+                "updated_at": str(datetime.now()),
             },
             Query().name == table_name,
         )
 
-    def _remove_table_info(self, table_name: StoreName) -> None:
-        """删除存储表信息"""
+    def _remove_table_info(self, table_name: str) -> None:
         self.db.table(self.TABLE_INFO_TABLE).remove(Query().name == table_name)
 
-    def _get_table_type(self, table_name: StoreName) -> str:
-        """获取存储表类型"""
+    def _get_table_type(self, table_name: str) -> str:
         result = self.db.table(self.TABLE_INFO_TABLE).get(Query().name == table_name)
         if result is None:
             raise StoreNotFoundError(f"table '{table_name}' does not exist")
@@ -376,7 +354,7 @@ class TinyDBStore(TinyDBBase, BaseDB):
                 "Table name must start with a letter and contain only letters, numbers and underscores"
             )
 
-    def get_table(self, table_name: StoreName) -> Union[TinyDBKVTable, TinyDBKKVTable]:
+    def get_table(self, table_name: str) -> Union[TinyDBKVTable, TinyDBKKVTable]:
         """获取指定的存储表接口"""
         self._ensure_table_exists(table_name)
         table_type = self._get_table_type(table_name)
@@ -384,14 +362,13 @@ class TinyDBStore(TinyDBBase, BaseDB):
             return TinyDBKKVTable(self._get_db_path(table_name), table_name)
         return TinyDBKVTable(self._get_db_path(table_name), table_name)
 
-    def list_tables(self) -> Dict[StoreName, str]:
-        """获取所有存储表名列表"""
-        result = {}
-        for doc in self.db.table(self.TABLE_INFO_TABLE).all():
-            result[StoreName(doc["name"])] = doc["type"]
-        return result
+    def list_tables(self) -> Dict[str, str]:
+        return {
+            doc["name"]: doc["type"]
+            for doc in self.db.table(self.TABLE_INFO_TABLE).all()
+        }
 
-    def create_kv_table(self, table_name: StoreName) -> None:
+    def create_kv_table(self, table_name: str) -> None:
         """创建新的KV存储表"""
         try:
             self._validate_table_name(table_name)
@@ -406,7 +383,7 @@ class TinyDBStore(TinyDBBase, BaseDB):
             logger.error(f"Failed to create KV table {table_name}: {str(e)}")
             raise
 
-    def create_kkv_table(self, table_name: StoreName) -> None:
+    def create_kkv_table(self, table_name: str) -> None:
         """创建新的KKV存储表"""
         self._validate_table_name(table_name)
         db_path = self._get_db_path(table_name)
@@ -416,7 +393,7 @@ class TinyDBStore(TinyDBBase, BaseDB):
         self._add_table_info(table_name, "kkv")
         logger.success(f"created KKV table: {table_name} success")
 
-    def drop_table(self, table_name: StoreName) -> None:
+    def drop_table(self, table_name: str) -> None:
         """删除指定的存储表"""
         try:
             self._ensure_table_exists(table_name)

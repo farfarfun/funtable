@@ -7,12 +7,10 @@
 
 from abc import ABC, abstractmethod
 from logging import getLogger
-from typing import Dict, NewType, Optional, TypedDict, TypeVar, Union
+from typing import Dict, Optional, TypedDict, TypeVar, Union
 
 T = TypeVar("T", bound="BaseKVTable")
 S = TypeVar("S", bound="BaseKKVTable")
-
-StoreKey = NewType("StoreKey", str)  # 存储键类型，基于字符串
 
 
 class StoreValueDict(TypedDict):
@@ -24,8 +22,6 @@ class StoreValueDict(TypedDict):
 
 
 StoreValue = StoreValueDict  # 更严格的值类型定义
-
-StoreName = NewType("StoreName", str)  # 存储表名类型，基于字符串
 
 
 class StoreError(Exception):
@@ -104,59 +100,29 @@ class BaseKVTable(ABC):
         pass  # 移除具体实现，保持抽象
 
     @abstractmethod
-    def set(self, key: StoreKey, value: StoreValue) -> None:
+    def set(self, key: str, value: StoreValue) -> None:
         """存储键值对
 
         Args:
             key: 字符串类型的键
             value: 字典类型的值
-
-        Raises:
-            KeyError: 当键不是字符串类型时
-            StoreValueError: 当值不是字典类型时
         """
         pass
 
     @abstractmethod
-    def get(self, key: StoreKey) -> Optional[StoreValue]:
-        """获取键的值
-
-        Args:
-            key: 要查询的键
-
-        Returns:
-            如果键存在，返回对应的字典值；如果不存在，返回None
-        """
+    def get(self, key: str) -> Optional[StoreValue]:
         pass
 
     @abstractmethod
-    def delete(self, key: StoreKey) -> bool:
-        """删除键值对
-
-        Args:
-            key: 要删除的键
-
-        Returns:
-            如果删除成功返回True，键不存在返回False
-        """
+    def delete(self, key: str) -> bool:
         pass
 
     @abstractmethod
-    def list_keys(self) -> list[StoreKey]:
-        """获取所有键列表
-
-        Returns:
-            包含所有键的列表
-        """
+    def list_keys(self) -> list[str]:
         pass
 
     @abstractmethod
-    def list_all(self) -> Dict[StoreKey, StoreValue]:
-        """获取所有键值对数据
-
-        Returns:
-            包含所有键值对的字典，格式为 {key: value_dict}
-        """
+    def list_all(self) -> Dict[str, StoreValue]:
         pass
 
     @abstractmethod
@@ -198,7 +164,7 @@ class BaseKKVTable(ABC):
         pass  # 移除具体实现，保持抽象
 
     @abstractmethod
-    def set(self, pkey: StoreKey, skey: StoreKey, value: StoreValue) -> None:
+    def set(self, pkey: str, skey: str, value: StoreValue) -> None:
         """存储键值对
 
         Args:
@@ -209,59 +175,23 @@ class BaseKKVTable(ABC):
         pass
 
     @abstractmethod
-    def get(self, pkey: StoreKey, skey: StoreKey) -> Optional[StoreValue]:
-        """获取键的值
-
-        Args:
-            pkey: 主键
-            skey: 次键
-
-        Returns:
-            如果键存在，返回对应的字典值；如果不存在，返回None
-        """
+    def get(self, pkey: str, skey: str) -> Optional[StoreValue]:
         pass
 
     @abstractmethod
-    def delete(self, pkey: StoreKey, skey: StoreKey) -> bool:
-        """删除键值对
-
-        Args:
-            pkey: 主键
-            skey: 次键
-
-        Returns:
-            如果删除成功返回True，键不存在返回False
-        """
+    def delete(self, pkey: str, skey: str) -> bool:
         pass
 
     @abstractmethod
-    def list_pkeys(self) -> list[StoreKey]:
-        """获取所有主键列表
-
-        Returns:
-            包含所有主键的列表
-        """
+    def list_pkeys(self) -> list[str]:
         pass
 
     @abstractmethod
-    def list_skeys(self, pkey: StoreKey) -> list[StoreKey]:
-        """获取指定主键下的所有次键列表
-
-        Args:
-            pkey: 主键
-
-        Returns:
-            包含所有次键的列表
-        """
+    def list_skeys(self, pkey: str) -> list[str]:
         pass
 
     @abstractmethod
-    def list_all(self) -> Dict[StoreKey, Dict[StoreKey, StoreValue]]:
-        """获取所有键值对数据
-
-        Returns:
-            包含所有键值对的字典，格式为 {pkey: {skey: value_dict}}
-        """
+    def list_all(self) -> Dict[str, Dict[str, StoreValue]]:
         pass
 
 
@@ -287,7 +217,7 @@ class BaseDB(ABC):
         pass
 
     @abstractmethod
-    def _add_table_info(self, table_name: StoreName, table_type: str) -> None:
+    def _add_table_info(self, table_name: str, table_type: str) -> None:
         """添加或更新表信息
 
         Args:
@@ -297,7 +227,7 @@ class BaseDB(ABC):
         pass
 
     @abstractmethod
-    def _remove_table_info(self, table_name: StoreName) -> None:
+    def _remove_table_info(self, table_name: str) -> None:
         """删除表信息
 
         Args:
@@ -306,7 +236,7 @@ class BaseDB(ABC):
         pass
 
     @abstractmethod
-    def _get_table_type(self, table_name: StoreName) -> str:
+    def _get_table_type(self, table_name: str) -> str:
         """获取表类型
 
         Args:
@@ -321,7 +251,7 @@ class BaseDB(ABC):
         pass
 
     @abstractmethod
-    def create_kv_table(self, table_name: StoreName) -> None:
+    def create_kv_table(self, table_name: str) -> None:
         """创建新的KV表
 
         Args:
@@ -339,7 +269,7 @@ class BaseDB(ABC):
             raise
 
     @abstractmethod
-    def create_kkv_table(self, table_name: StoreName) -> None:
+    def create_kkv_table(self, table_name: str) -> None:
         """创建新的KKV表"""
         self.logger.info(f"Creating KKV table: {table_name}")
         try:
@@ -350,7 +280,7 @@ class BaseDB(ABC):
             raise
 
     @abstractmethod
-    def get_table(self, table_name: StoreName) -> Union[BaseKVTable, BaseKKVTable]:
+    def get_table(self, table_name: str) -> Union[BaseKVTable, BaseKKVTable]:
         """获取指定的表接口
 
         Args:
@@ -366,7 +296,7 @@ class BaseDB(ABC):
         pass
 
     @abstractmethod
-    def list_tables(self) -> Dict[StoreName, str]:
+    def list_tables(self) -> Dict[str, str]:
         """获取所有表名列表
 
         Returns:
@@ -375,7 +305,7 @@ class BaseDB(ABC):
         pass
 
     @abstractmethod
-    def drop_table(self, table_name: StoreName) -> None:
+    def drop_table(self, table_name: str) -> None:
         """删除指定的表
 
         Args:
