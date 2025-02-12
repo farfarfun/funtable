@@ -1,4 +1,4 @@
-from .interface import BaseDB, BaseKKVTable, BaseKVTable
+from .interfaces import BaseDB, BaseKKVTable, BaseKVTable
 from .sqlite_table import SQLiteKKVTable, SQLiteKVTable, SQLiteStore
 from .tinydb_table import TinyDBKKVTable, TinyDBKVTable, TinyDBStore
 
