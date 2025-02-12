@@ -1,0 +1,13 @@
+[project]
+name = "funtable"
+version = "1.1.1"
+description = "funtable"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [ "funutil>=1.0.46", "tinydb>=4.8.2",]
+[[project.authors]]
+name = "niuliangtao"
+email = "farfarfun@qq.com"
+
+[tool.setuptools]
+license-files = []
