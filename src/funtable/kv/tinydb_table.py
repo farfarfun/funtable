@@ -14,7 +14,7 @@ from typing import Dict, Optional, Union
 from funutil import getLogger
 from tinydb import Query, TinyDB
 
-from .interfaces import (
+from .interface import (
     BaseDB,
     BaseKKVTable,
     BaseKVTable,
@@ -24,7 +24,7 @@ from .interfaces import (
     StoreValue,
     StoreValueError,
 )
-from .interfaces import (
+from .interface import (
     KeyError as StoreKeyError,
 )
 

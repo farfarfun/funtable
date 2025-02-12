@@ -4,7 +4,7 @@ from typing import Dict
 
 from funutil import getLogger
 
-from .interfaces import (
+from .interface import (
     StoreKey,
     StoreName,
     StoreNotFoundError,
