@@ -21,7 +21,7 @@ from .interface import (
     StoreError,
 )
 
-logger = get_logger(__name__)
+logger = get_logger("funtable")
 
 
 class TinyDBTableBase:
