@@ -1,10 +1,10 @@
 [project]
 name = "funtable"
-version = "1.0.25"
+version = "1.0.26"
 description = "funtable"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = [ "fundrive>=1.2.18", "funutil>=1.0.5",]
+dependencies = [ "fundrive>=1.2.18", "funutil>=1.0.5", "tinydb>=4.8.2",]
 [[project.authors]]
 name = "niuliangtao"
 email = "farfarfun@qq.com"
