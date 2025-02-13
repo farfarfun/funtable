@@ -17,12 +17,7 @@ from .interface import (
     BaseDB,
     BaseKKVTable,
     BaseKVTable,
-    StoreNotFoundError,
-    StoreValue,
-    StoreValueError,
-)
-from .interface import (
-    KeyError as StoreKeyError,
+    StoreError,
 )
 
 logger = getLogger("funkv")
@@ -98,14 +93,14 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
     def _validate_key(self, key: str) -> None:
         """验证键的类型"""
         if not isinstance(key, str):
-            raise StoreKeyError("Key must be string type")
+            raise StoreError("Key must be string type")
 
     def _validate_value(self, value: Dict) -> None:
         """验证值的类型"""
         if not isinstance(value, dict):
-            raise StoreValueError("Value must be dict type")
+            raise StoreError("Value must be dict type")
 
-    def set(self, key: str, value: StoreValue) -> None:
+    def set(self, key: str, value: Dict) -> None:
         try:
             self._validate_key(key)
             self._validate_value(value)
@@ -114,11 +109,11 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
                 f"INSERT OR REPLACE INTO {self.table_name} (key, value) VALUES (?, ?)",
                 (key, value_json),
             )
-        except (StoreKeyError, StoreValueError) as e:
+        except StoreError as e:
             logger.error(f"failed to set KV pair: {str(e)}")
             raise
 
-    def get(self, key: str) -> Optional[StoreValue]:
+    def get(self, key: str) -> Optional[Dict]:
         cursor = self._execute(
             f"SELECT value FROM {self.table_name} WHERE key = ?", (key,)
         )
@@ -134,11 +129,11 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
         cursor = self._execute(f"SELECT key FROM {self.table_name}")
         return [row[0] for row in cursor.fetchall()]
 
-    def list_all(self) -> Dict[str, StoreValue]:
+    def list_all(self) -> Dict[str, Dict]:
         cursor = self._execute(f"SELECT key, value FROM {self.table_name}")
         return {row[0]: json.loads(row[1]) for row in cursor.fetchall()}
 
-    def batch_set(self, items: Dict[str, StoreValue]) -> None:
+    def batch_set(self, items: Dict[str, Dict]) -> None:
         """批量设置键值对"""
         with self.connection:
             cursor = self.connection.cursor()
@@ -187,14 +182,14 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
     def _validate_key(self, key: str) -> None:
         """验证键的类型"""
         if not isinstance(key, str):
-            raise StoreKeyError("Key must be string type")
+            raise StoreError("Key must be string type")
 
     def _validate_value(self, value: Dict) -> None:
         """验证值的类型"""
         if not isinstance(value, dict):
-            raise StoreValueError("Value must be dict type")
+            raise StoreError("Value must be dict type")
 
-    def set(self, pkey: str, skey: str, value: StoreValue) -> None:
+    def set(self, pkey: str, skey: str, value: Dict) -> None:
         try:
             self._validate_key(pkey)
             self._validate_key(skey)
@@ -205,11 +200,11 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
                 f"INSERT OR REPLACE INTO {self.table_name} (key1, key2, value) VALUES (?, ?, ?)",
                 (pkey, skey, value_json),
             )
-        except (StoreKeyError, StoreValueError) as e:
+        except StoreError as e:
             logger.error(f"failed to set KKV pair: {str(e)}")
             raise
 
-    def get(self, pkey: str, skey: str) -> Optional[StoreValue]:
+    def get(self, pkey: str, skey: str) -> Optional[Dict]:
         logger.debug(f"getting value for pkey={pkey}, skey={skey}")
         cursor = self._execute(
             f"SELECT value FROM {self.table_name} WHERE key1 = ? AND key2 = ?",
@@ -236,9 +231,9 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
         )
         return [row[0] for row in cursor.fetchall()]
 
-    def list_all(self) -> Dict[str, Dict[str, StoreValue]]:
+    def list_all(self) -> Dict[str, Dict[str, Dict]]:
         cursor = self._execute(f"SELECT key1, key2, value FROM {self.table_name}")
-        result: Dict[str, Dict[str, StoreValue]] = {}
+        result: Dict[str, Dict[str, Dict]] = {}
         for row in cursor.fetchall():
             key1, key2, value_json = row
             if key1 not in result:
@@ -258,7 +253,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
         """回滚事务"""
         self._execute("ROLLBACK")
 
-    def batch_set(self, items: Dict[str, Dict[str, StoreValue]]) -> None:
+    def batch_set(self, items: Dict[str, Dict[str, Dict]]) -> None:
         """批量设置键值对"""
         with self.connection:
             cursor = self.connection.cursor()
@@ -336,7 +331,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         )
         result = cursor.fetchone()
         if result is None:
-            raise StoreNotFoundError(f"Table '{table_name}' does not exist")
+            raise StoreError(f"Table '{table_name}' does not exist")
         return result[0]
 
     def _ensure_table_exists(self, table_name: str) -> None:
@@ -346,14 +341,14 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
             (table_name,),
         )
         if cursor.fetchone() is None:
-            raise StoreNotFoundError(f"Table '{table_name}' does not exist")
+            raise StoreError(f"Table '{table_name}' does not exist")
 
     def _validate_table_name(self, table_name: str) -> None:
         """验证表名是否合法"""
         if not isinstance(table_name, str):
-            raise StoreValueError("Table name must be string type")
+            raise StoreError("Table name must be string type")
         if not self._table_name_pattern.match(table_name):
-            raise StoreValueError(
+            raise StoreError(
                 "Table name must start with a letter and contain only letters, numbers and underscores"
             )
 

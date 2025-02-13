@@ -18,12 +18,7 @@ from .interface import (
     BaseDB,
     BaseKKVTable,
     BaseKVTable,
-    StoreNotFoundError,
-    StoreValue,
-    StoreValueError,
-)
-from .interface import (
-    KeyError as StoreKeyError,
+    StoreError,
 )
 
 logger = getLogger("funkv")
@@ -82,14 +77,14 @@ class TinyDBKVTable(TinyDBBase, BaseKVTable):
     def _validate_key(self, key: str) -> None:
         """验证键的类型"""
         if not isinstance(key, str):
-            raise StoreKeyError("Key must be string type")
+            raise StoreError("Key must be string type")
 
     def _validate_value(self, value: Dict) -> None:
         """验证值的类型"""
         if not isinstance(value, dict):
-            raise StoreValueError("Value must be dict type")
+            raise StoreError("Value must be dict type")
 
-    def set(self, key: str, value: StoreValue) -> None:
+    def set(self, key: str, value: Dict) -> None:
         try:
             self._validate_key(key)
             self._validate_value(value)
@@ -98,11 +93,11 @@ class TinyDBKVTable(TinyDBBase, BaseKVTable):
                 self.query.key == key,
             )
             self._cache[key] = (time.time(), value)
-        except (StoreKeyError, StoreValueError) as e:
+        except StoreError as e:
             logger.error(f"failed to set KV pair: {str(e)}")
             raise
 
-    def get(self, key: str) -> Optional[StoreValue]:
+    def get(self, key: str) -> Optional[Dict]:
         """获取键的值
 
         Args:
@@ -148,7 +143,7 @@ class TinyDBKVTable(TinyDBBase, BaseKVTable):
         """
         return [doc["key"] for doc in self.table.all()]
 
-    def list_all(self) -> Dict[str, StoreValue]:
+    def list_all(self) -> Dict[str, Dict]:
         """获取所有键值对数据
 
         Returns:
@@ -188,14 +183,14 @@ class TinyDBKKVTable(TinyDBBase, BaseKKVTable):
     def _validate_key(self, key: str) -> None:
         """验证键的类型"""
         if not isinstance(key, str):
-            raise StoreKeyError("Key must be string type")
+            raise StoreError("Key must be string type")
 
     def _validate_value(self, value: Dict) -> None:
         """验证值的类型"""
         if not isinstance(value, dict):
-            raise StoreValueError("Value must be dict type")
+            raise StoreError("Value must be dict type")
 
-    def set(self, pkey: str, skey: str, value: StoreValue) -> None:
+    def set(self, pkey: str, skey: str, value: Dict) -> None:
         try:
             self._validate_key(pkey)
             self._validate_key(skey)
@@ -205,11 +200,11 @@ class TinyDBKKVTable(TinyDBBase, BaseKKVTable):
                 {"key1": pkey, "key2": skey, "value": value},
                 (self.query.key1 == pkey) & (self.query.key2 == skey),
             )
-        except (StoreKeyError, StoreValueError) as e:
+        except StoreError as e:
             logger.error(f"failed to set KKV pair: {str(e)}")
             raise
 
-    def get(self, pkey: str, skey: str) -> Optional[StoreValue]:
+    def get(self, pkey: str, skey: str) -> Optional[Dict]:
         """获取键的值
 
         Args:
@@ -258,13 +253,13 @@ class TinyDBKKVTable(TinyDBBase, BaseKKVTable):
         """
         return [doc["key2"] for doc in self.table.search(self.query.key1 == pkey)]
 
-    def list_all(self) -> Dict[str, Dict[str, StoreValue]]:
+    def list_all(self) -> Dict[str, Dict[str, Dict]]:
         """获取所有键值对数据
 
         Returns:
             包含所有键值对的字典，格式为 {key1: {key2: value_dict}}
         """
-        result: Dict[str, Dict[str, StoreValue]] = {}
+        result: Dict[str, Dict[str, Dict]] = {}
         for doc in self.table.all():
             pkey = doc["key1"]
             skey = doc["key2"]
@@ -318,7 +313,7 @@ class TinyDBStore(TinyDBBase, BaseDB):
     def _get_table_type(self, table_name: str) -> str:
         result = self.db.table(self.TABLE_INFO_TABLE).get(Query().name == table_name)
         if result is None:
-            raise StoreNotFoundError(f"table '{table_name}' does not exist")
+            raise StoreError(f"table '{table_name}' does not exist")
         return result["type"]
 
     def _ensure_table_exists(self, table_name: str) -> None:
@@ -326,31 +321,21 @@ class TinyDBStore(TinyDBBase, BaseDB):
         if not self.db.table(self.TABLE_INFO_TABLE).contains(
             Query().name == table_name
         ):
-            raise StoreNotFoundError(f"table '{table_name}' does not exist")
+            raise StoreError(f"Table '{table_name}' does not exist")
         db_path = self._get_db_path(table_name)
         if not os.path.exists(db_path):
-            raise StoreNotFoundError(
-                f"Table '{table_name}' database file does not exist"
-            )
+            raise StoreError(f"Table '{table_name}' database file does not exist")
 
     def _get_db_path(self, table_name: str) -> str:
         """获取存储表的数据库文件路径"""
         return os.path.join(self.db_dir, f"{table_name}.json")
 
     def _validate_table_name(self, table_name: str) -> None:
-        """验证表名是否合法
-
-        Args:
-            table_name: 表名
-
-        Raises:
-            StoreValueError: 当表名不是字符串时抛出
-            StoreValueError: 当表名格式不合法时抛出
-        """
+        """验证表名是否合法"""
         if not isinstance(table_name, str):
-            raise StoreValueError("Table name must be string type")
+            raise StoreError("Table name must be string type")
         if not self._table_name_pattern.match(table_name):
-            raise StoreValueError(
+            raise StoreError(
                 "Table name must start with a letter and contain only letters, numbers and underscores"
             )
 
@@ -379,7 +364,7 @@ class TinyDBStore(TinyDBBase, BaseDB):
             db.close()
             self._add_table_info(table_name, "kv")
             logger.success(f"created KV table: {table_name} success")
-        except StoreValueError as e:
+        except StoreError as e:
             logger.error(f"Failed to create KV table {table_name}: {str(e)}")
             raise
 
@@ -402,6 +387,6 @@ class TinyDBStore(TinyDBBase, BaseDB):
             if os.path.exists(db_path):
                 os.remove(db_path)
             self._remove_table_info(table_name)
-        except StoreNotFoundError as e:
+        except StoreError as e:
             logger.error(f"failed to drop table {table_name}: {str(e)}")
             raise

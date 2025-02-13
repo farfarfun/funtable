@@ -6,74 +6,20 @@
 """
 
 from abc import ABC, abstractmethod
-from logging import getLogger
-from typing import Dict, Optional, TypedDict, TypeVar, Union
+from typing import Dict, Optional, TypeVar, Union
+
+from funutil import getLogger
 
 T = TypeVar("T", bound="BaseKVTable")
 S = TypeVar("S", bound="BaseKKVTable")
-
-
-class StoreValueDict(TypedDict):
-    """存储值字典类型"""
-
-    created_at: float
-    updated_at: float
-    data: Dict[str, any]
-
-
-StoreValue = StoreValueDict  # 更严格的值类型定义
+logger = getLogger("funkv")
 
 
 class StoreError(Exception):
-    """存储操作基础异常类
+    """存储操作异常类
 
-    所有存储相关的自定义异常都应继承自此类
+    所有存储相关的错误都使用此异常类，具体错误类型通过错误信息区分。
     """
-
-    pass
-
-
-class KeyError(StoreError):
-    """键错误异常
-
-    当操作的键类型不正确时抛出此异常
-    """
-
-    pass
-
-
-class StoreValueError(StoreError):
-    """值错误异常
-
-    当操作的值类型不正确或格式不合法时抛出此异常
-    """
-
-    pass
-
-
-class StoreNotFoundError(StoreError):
-    """存储表不存在异常
-
-    当操作的存储表不存在时抛出此异常
-    """
-
-    pass
-
-
-class TableExistsError(StoreError):
-    """表已存在异常"""
-
-    pass
-
-
-class TableNameError(StoreError):
-    """表名格式错误异常"""
-
-    pass
-
-
-class ConnectionError(StoreError):
-    """数据库连接异常"""
 
     pass
 
@@ -100,7 +46,7 @@ class BaseKVTable(ABC):
         pass  # 移除具体实现，保持抽象
 
     @abstractmethod
-    def set(self, key: str, value: StoreValue) -> None:
+    def set(self, key: str, value: Dict) -> None:
         """存储键值对
 
         Args:
@@ -110,7 +56,7 @@ class BaseKVTable(ABC):
         pass
 
     @abstractmethod
-    def get(self, key: str) -> Optional[StoreValue]:
+    def get(self, key: str) -> Optional[Dict]:
         pass
 
     @abstractmethod
@@ -122,7 +68,7 @@ class BaseKVTable(ABC):
         pass
 
     @abstractmethod
-    def list_all(self) -> Dict[str, StoreValue]:
+    def list_all(self) -> Dict[str, Dict]:
         pass
 
     @abstractmethod
@@ -164,7 +110,7 @@ class BaseKKVTable(ABC):
         pass  # 移除具体实现，保持抽象
 
     @abstractmethod
-    def set(self, pkey: str, skey: str, value: StoreValue) -> None:
+    def set(self, pkey: str, skey: str, value: Dict) -> None:
         """存储键值对
 
         Args:
@@ -175,7 +121,7 @@ class BaseKKVTable(ABC):
         pass
 
     @abstractmethod
-    def get(self, pkey: str, skey: str) -> Optional[StoreValue]:
+    def get(self, pkey: str, skey: str) -> Optional[Dict]:
         pass
 
     @abstractmethod
@@ -191,7 +137,7 @@ class BaseKKVTable(ABC):
         pass
 
     @abstractmethod
-    def list_all(self) -> Dict[str, Dict[str, StoreValue]]:
+    def list_all(self) -> Dict[str, Dict[str, Dict]]:
         pass
 
 
@@ -209,7 +155,7 @@ class BaseDB(ABC):
     TABLE_INFO_TABLE = "_table_info"  # 存储表信息的特殊表名
 
     def __init__(self):
-        self.logger = getLogger(f"{self.__class__.__name__}")
+        pass
 
     @abstractmethod
     def _init_table_info_table(self) -> None:
@@ -260,23 +206,23 @@ class BaseDB(ABC):
         Raises:
             StoreValueError: 当表名不合法时抛出
         """
-        self.logger.info(f"Creating KV table: {table_name}")
+        logger.info(f"Creating KV table: {table_name}")
         try:
             # 创建表逻辑
-            self.logger.debug("Table created successfully")
+            logger.debug("Table created successfully")
         except Exception as e:
-            self.logger.error(f"Failed to create table: {e}", exc_info=True)
+            logger.error(f"Failed to create table: {e}", exc_info=True)
             raise
 
     @abstractmethod
     def create_kkv_table(self, table_name: str) -> None:
         """创建新的KKV表"""
-        self.logger.info(f"Creating KKV table: {table_name}")
+        logger.info(f"Creating KKV table: {table_name}")
         try:
             # 创建表逻辑
-            self.logger.debug("Table created successfully")
+            logger.debug("Table created successfully")
         except Exception as e:
-            self.logger.error(f"Failed to create table: {e}", exc_info=True)
+            logger.error(f"Failed to create table: {e}", exc_info=True)
             raise
 
     @abstractmethod

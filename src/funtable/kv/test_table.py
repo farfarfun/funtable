@@ -4,11 +4,9 @@ from typing import Dict
 
 from funutil import getLogger
 
-from .interface import (
-    StoreNotFoundError,
-    StoreValue,
-    StoreValueError,
-)
+from .interface import StoreError
+
+
 from .sqlite_table import SQLiteStore
 from .tinydb_table import TinyDBStore
 
@@ -82,8 +80,15 @@ class TestSQLiteStore(unittest.TestCase):
         invalid_names = ["123test", "test-table", "test table"]
         for name in invalid_names:
             logger.info(f"测试无效表名: {name}")
-            with self.assertRaises(StoreValueError):
+            with self.assertRaises(StoreError):
                 self.store.create_kv_table(name)
+
+    def test_table_not_found(self):
+        """测试访问不存在的表"""
+        table_name = "non_existent"
+        logger.info(f"尝试访问不存在的表: {table_name}")
+        with self.assertRaises(StoreError):
+            self.store.get_table(table_name)
 
     def test_kv_table_operations(self):
         """测试KV表的基本操作
@@ -119,7 +124,7 @@ class TestSQLiteStore(unittest.TestCase):
         self.assertIsNone(kv_table.get(key))
 
         # 测试列表操作
-        test_data: Dict[str, StoreValue] = {
+        test_data: Dict[str, Dict] = {
             "key1": {"name": "test1"},
             "key2": {"name": "test2"},
         }
@@ -170,7 +175,7 @@ class TestSQLiteStore(unittest.TestCase):
         self.assertIsNone(kkv_table.get(pkey, skey))
 
         # 测试列表操作
-        test_data = {
+        test_data: Dict[str, Dict[str, Dict]] = {
             "user1": {
                 "profile": {"name": "test1"},
                 "settings": {"theme": "dark"},
@@ -274,19 +279,14 @@ class TestTinyDBStore(unittest.TestCase):
         invalid_names = ["123test", "test-table", "test table"]
         for name in invalid_names:
             logger.info(f"测试无效表名: {name}")
-            with self.assertRaises(StoreValueError):
+            with self.assertRaises(StoreError):
                 self.store.create_kv_table(name)
 
     def test_table_not_found(self):
-        """测试访问不存在的表
-
-        验证：
-        1. 访问不存在的表时抛出正确的异常
-        2. 异常信息包含正确的表名
-        """
+        """测试访问不存在的表"""
         table_name = "non_existent"
         logger.info(f"尝试访问不存在的表: {table_name}")
-        with self.assertRaises(StoreNotFoundError):
+        with self.assertRaises(StoreError):
             self.store.get_table(table_name)
 
     def test_kv_table_operations(self):
@@ -310,7 +310,7 @@ class TestTinyDBStore(unittest.TestCase):
         self.assertIsNone(kv_table.get(key))
 
         # 测试列表操作
-        test_data: Dict[str, StoreValue] = {
+        test_data: Dict[str, Dict] = {
             "key1": {"name": "test1"},
             "key2": {"name": "test2"},
         }
@@ -347,7 +347,7 @@ class TestTinyDBStore(unittest.TestCase):
         self.assertIsNone(kkv_table.get(pkey, skey))
 
         # 测试列表操作
-        test_data = {
+        test_data: Dict[str, Dict[str, Dict]] = {
             "user1": {
                 "profile": {"name": "test1"},
                 "settings": {"theme": "dark"},
