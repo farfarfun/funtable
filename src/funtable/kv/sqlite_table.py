@@ -8,10 +8,10 @@ SQLite存储实现模块
 import json
 import re
 import sqlite3
-import time
+import threading
 from typing import Dict, Optional, Union
 
-from funutil import getLogger
+from funutil import get_logger
 
 from .interface import (
     BaseDB,
@@ -20,62 +20,118 @@ from .interface import (
     StoreError,
 )
 
-logger = getLogger("funkv")
+logger = get_logger("funtable")
 
 
 class SQLiteTableBase:
-    """SQLite数据库连接管理基类
-
-    实现数据库连接的单例模式管理，确保同一数据库文件只创建一个连接实例。
-    提供SQL执行的基础方法。
-    """
+    """SQLite表基类"""
 
     def __init__(self, db_path: str):
-        """初始化SQLite数据库连接
-
-        Args:
-            db_path: SQLite数据库文件路径
-        """
+        """初始化SQLite连接"""
         self.db_path = db_path
-        self._connection = None
+        self._local = threading.local()
+        self._init_thread_local()
+
+    def _validate_table_name(self, table_name: str) -> None:
+        """验证表名是否有效"""
+        if not table_name:
+            raise StoreError("Table name cannot be empty")
+        if len(table_name) > 128:
+            raise StoreError("Table name too long (max 128 characters)")
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", table_name):
+            raise StoreError(
+                "Invalid table name format. Must start with a letter and contain only letters, numbers, and underscores"
+            )
+
+    def _init_thread_local(self):
+        """初始化线程本地存储"""
+        if not hasattr(self._local, "in_transaction"):
+            self._local.in_transaction = False
+        if not hasattr(self._local, "connection"):
+            self._local.connection = None
 
     @property
     def connection(self) -> sqlite3.Connection:
-        """获取数据库连接（单例模式）"""
-        if self._connection is None:
-            self._connection = self._create_connection()
-        return self._connection
-
-    def _create_connection(self):
-        # 添加重试逻辑
-        retries = 3
-        while retries > 0:
+        """获取数据库连接，每个线程一个独立连接"""
+        self._init_thread_local()
+        if self._local.connection is None:
             try:
-                conn = sqlite3.connect(
-                    self.db_path, check_same_thread=False, timeout=20
-                )
-                conn.row_factory = sqlite3.Row
-                return conn
-            except sqlite3.Error:
-                retries -= 1
-                if retries == 0:
-                    raise
-                time.sleep(1)
+                self._local.connection = sqlite3.connect(self.db_path)
+                self._local.connection.row_factory = sqlite3.Row
+            except Exception as e:
+                logger.error(f"Failed to connect to SQLite database: {str(e)}")
+                raise StoreError(f"Database connection failed: {str(e)}")
+        return self._local.connection
 
     def _execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         """执行SQL语句"""
-        logger.debug(f"executing SQL: {sql} with params: {params}")
-        cursor = self.connection.cursor()
-        cursor.execute(sql, params)
-        self.connection.commit()
-        return cursor
+        self._init_thread_local()
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(sql, params)
+            if not self._local.in_transaction:
+                self.connection.commit()
+            return cursor
+        except Exception as e:
+            logger.error(f"SQLite error executing {sql}: {str(e)}")
+            if not self._local.in_transaction:
+                self.connection.rollback()
+            raise StoreError(f"Database operation failed: {str(e)}")
+
+    def close(self):
+        """关闭数据库连接"""
+        self._init_thread_local()
+        if self._local.connection is not None:
+            try:
+                if self._local.in_transaction:
+                    self._local.connection.rollback()
+                self._local.connection.close()
+                self._local.connection = None
+            except Exception as e:
+                logger.error(f"Error closing database connection: {str(e)}")
+                raise StoreError(f"Failed to close database: {str(e)}")
 
     def __del__(self):
-        """析构函数，确保连接被正确关闭"""
-        if self._connection is not None:
-            logger.debug(f"closing SQLite connection for {self.db_path}")
-            self._connection.close()
-            self._connection = None
+        """析构函数"""
+        self.close()
+
+    def begin_transaction(self) -> None:
+        """开始事务"""
+        self._init_thread_local()
+        if self._local.in_transaction:
+            raise StoreError("Already in transaction")
+        try:
+            self.connection.execute("BEGIN")
+            self._local.in_transaction = True
+        except Exception as e:
+            logger.error(f"Error starting transaction: {str(e)}")
+            raise StoreError(f"Failed to start transaction: {str(e)}")
+
+    def commit(self) -> None:
+        """提交事务"""
+        self._init_thread_local()
+        if not self._local.in_transaction:
+            raise StoreError("Not in transaction")
+        try:
+            self.connection.commit()
+        except Exception as e:
+            logger.error(f"Error committing transaction: {str(e)}")
+            raise StoreError(f"Failed to commit transaction: {str(e)}")
+        finally:
+            self._local.in_transaction = False
+
+    def rollback(self) -> None:
+        """回滚事务"""
+        self._init_thread_local()
+        if not self._local.in_transaction:
+            raise StoreError("Not in transaction")
+        try:
+            self.connection.rollback()
+        except Exception as e:
+            logger.error(f"Error rolling back transaction: {str(e)}")
+            raise StoreError(f"Failed to rollback transaction: {str(e)}")
+        finally:
+            self._local.in_transaction = False
 
 
 class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
@@ -89,80 +145,115 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
     def __init__(self, db_path: str, table_name: str):
         super().__init__(db_path)
         self.table_name = table_name
+        self._init_table()
 
-    def _validate_key(self, key: str) -> None:
+    def _init_table(self):
+        """初始化表结构"""
+        self._execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {self.table_name} (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
+
+    def _validate_key(self, key: str):
         """验证键的类型"""
         if not isinstance(key, str):
-            raise StoreError("Key must be string type")
+            raise StoreError(f"Key must be string, got {type(key)}")
 
-    def _validate_value(self, value: Dict) -> None:
+    def _validate_value(self, value: Dict):
         """验证值的类型"""
         if not isinstance(value, dict):
-            raise StoreError("Value must be dict type")
+            raise StoreError(f"Value must be dict, got {type(value)}")
 
     def set(self, key: str, value: Dict) -> None:
+        """设置键值对"""
         try:
             self._validate_key(key)
             self._validate_value(value)
-            value_json = json.dumps(value)
             self._execute(
                 f"INSERT OR REPLACE INTO {self.table_name} (key, value) VALUES (?, ?)",
-                (key, value_json),
+                (key, json.dumps(value)),
             )
-        except StoreError as e:
-            logger.error(f"failed to set KV pair: {str(e)}")
-            raise
+        except Exception as e:
+            logger.error(f"Error setting KV pair: {str(e)}")
+            raise StoreError(f"Failed to set value: {str(e)}")
 
     def get(self, key: str) -> Optional[Dict]:
-        cursor = self._execute(
-            f"SELECT value FROM {self.table_name} WHERE key = ?", (key,)
-        )
-        result = cursor.fetchone()
-        return json.loads(result[0]) if result else None
+        """获取键的值"""
+        try:
+            self._validate_key(key)
+            cursor = self._execute(
+                f"SELECT value FROM {self.table_name} WHERE key = ?",
+                (key,),
+            )
+            row = cursor.fetchone()
+            return json.loads(row[0]) if row else None
+        except Exception as e:
+            logger.error(f"Error getting value for key {key}: {str(e)}")
+            raise StoreError(f"Failed to get value: {str(e)}")
 
     def delete(self, key: str) -> bool:
-        logger.debug(f"deleting key={key}")
-        cursor = self._execute(f"DELETE FROM {self.table_name} WHERE key = ?", (key,))
-        return cursor.rowcount > 0
+        """删除键值对"""
+        try:
+            self._validate_key(key)
+            cursor = self._execute(
+                f"DELETE FROM {self.table_name} WHERE key = ?",
+                (key,),
+            )
+            return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error deleting key {key}: {str(e)}")
+            raise StoreError(f"Failed to delete value: {str(e)}")
 
     def list_keys(self) -> list[str]:
-        cursor = self._execute(f"SELECT key FROM {self.table_name}")
-        return [row[0] for row in cursor.fetchall()]
+        """列出所有键"""
+        try:
+            cursor = self._execute(f"SELECT key FROM {self.table_name}")
+            return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error listing keys: {str(e)}")
+            raise StoreError(f"Failed to list keys: {str(e)}")
 
     def list_all(self) -> Dict[str, Dict]:
-        cursor = self._execute(f"SELECT key, value FROM {self.table_name}")
-        return {row[0]: json.loads(row[1]) for row in cursor.fetchall()}
+        """列出所有键值对"""
+        try:
+            cursor = self._execute(f"SELECT key, value FROM {self.table_name}")
+            return {row[0]: json.loads(row[1]) for row in cursor.fetchall()}
+        except Exception as e:
+            logger.error(f"Error listing all KV pairs: {str(e)}")
+            raise StoreError(f"Failed to list all: {str(e)}")
 
     def batch_set(self, items: Dict[str, Dict]) -> None:
         """批量设置键值对"""
-        with self.connection:
+        try:
+            values = [(k, json.dumps(v)) for k, v in items.items()]
             cursor = self.connection.cursor()
             cursor.executemany(
                 f"INSERT OR REPLACE INTO {self.table_name} (key, value) VALUES (?, ?)",
-                [(k, json.dumps(v)) for k, v in items.items()],
+                values,
             )
+            self.connection.commit()
+        except Exception as e:
+            logger.error(f"Error in batch set operation: {str(e)}")
+            raise StoreError(f"Failed to perform batch set: {str(e)}")
 
     def batch_delete(self, keys: list[str]) -> int:
         """批量删除键值对"""
-        with self.connection:
+        try:
             cursor = self.connection.cursor()
-            cursor.execute(
-                f"DELETE FROM {self.table_name} WHERE key IN ({','.join('?' * len(keys))})",
-                keys,
+            cursor.executemany(
+                f"DELETE FROM {self.table_name} WHERE key = ?",
+                [(k,) for k in keys],
             )
-            return cursor.rowcount
-
-    def begin_transaction(self) -> None:
-        """开始事务"""
-        self._execute("BEGIN TRANSACTION")
-
-    def commit(self) -> None:
-        """提交事务"""
-        self._execute("COMMIT")
-
-    def rollback(self) -> None:
-        """回滚事务"""
-        self._execute("ROLLBACK")
+            deleted = cursor.rowcount
+            self.connection.commit()
+            return deleted
+        except Exception as e:
+            logger.error(f"Error in batch delete operation: {str(e)}")
+            raise StoreError(f"Failed to perform batch delete: {str(e)}")
 
 
 class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
@@ -178,112 +269,156 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
     def __init__(self, db_path: str, table_name: str):
         super().__init__(db_path)
         self.table_name = table_name
+        self._init_table()
 
-    def _validate_key(self, key: str) -> None:
+    def _init_table(self):
+        """初始化表结构"""
+        self._execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {self.table_name} (
+                key1 TEXT,
+                key2 TEXT,
+                value TEXT NOT NULL,
+                PRIMARY KEY (key1, key2)
+            )
+            """
+        )
+
+    def _validate_key(self, key: str):
         """验证键的类型"""
         if not isinstance(key, str):
-            raise StoreError("Key must be string type")
+            raise StoreError(f"Key must be string, got {type(key)}")
 
-    def _validate_value(self, value: Dict) -> None:
+    def _validate_value(self, value: Dict):
         """验证值的类型"""
         if not isinstance(value, dict):
-            raise StoreError("Value must be dict type")
+            raise StoreError(f"Value must be dict, got {type(value)}")
 
     def set(self, pkey: str, skey: str, value: Dict) -> None:
+        """设置键值对"""
         try:
             self._validate_key(pkey)
             self._validate_key(skey)
             self._validate_value(value)
-            logger.debug(f"setting KKV pair: pkey={pkey}, skey={skey}")
-            value_json = json.dumps(value)
             self._execute(
                 f"INSERT OR REPLACE INTO {self.table_name} (key1, key2, value) VALUES (?, ?, ?)",
-                (pkey, skey, value_json),
+                (pkey, skey, json.dumps(value)),
             )
-        except StoreError as e:
-            logger.error(f"failed to set KKV pair: {str(e)}")
-            raise
+        except Exception as e:
+            logger.error(f"Error setting KKV pair: {str(e)}")
+            raise StoreError(f"Failed to set value: {str(e)}")
 
     def get(self, pkey: str, skey: str) -> Optional[Dict]:
-        logger.debug(f"getting value for pkey={pkey}, skey={skey}")
-        cursor = self._execute(
-            f"SELECT value FROM {self.table_name} WHERE key1 = ? AND key2 = ?",
-            (pkey, skey),
-        )
-        result = cursor.fetchone()
-        return json.loads(result[0]) if result else None
+        """获取键的值"""
+        try:
+            self._validate_key(pkey)
+            self._validate_key(skey)
+            cursor = self._execute(
+                f"SELECT value FROM {self.table_name} WHERE key1 = ? AND key2 = ?",
+                (pkey, skey),
+            )
+            row = cursor.fetchone()
+            return json.loads(row[0]) if row else None
+        except Exception as e:
+            logger.error(f"Error getting value for key {pkey}, {skey}: {str(e)}")
+            raise StoreError(f"Failed to get value: {str(e)}")
 
     def delete(self, pkey: str, skey: str) -> bool:
-        logger.debug(f"deleting pkey={pkey}, skey={skey}")
-        cursor = self._execute(
-            f"DELETE FROM {self.table_name} WHERE key1 = ? AND key2 = ?",
-            (pkey, skey),
-        )
-        return cursor.rowcount > 0
+        """删除键值对"""
+        try:
+            self._validate_key(pkey)
+            self._validate_key(skey)
+            cursor = self._execute(
+                f"DELETE FROM {self.table_name} WHERE key1 = ? AND key2 = ?",
+                (pkey, skey),
+            )
+            return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error deleting key {pkey}, {skey}: {str(e)}")
+            raise StoreError(f"Failed to delete value: {str(e)}")
 
     def list_pkeys(self) -> list[str]:
-        cursor = self._execute(f"SELECT DISTINCT key1 FROM {self.table_name}")
-        return [row[0] for row in cursor.fetchall()]
+        """列出所有主键"""
+        try:
+            cursor = self._execute(f"SELECT DISTINCT key1 FROM {self.table_name}")
+            return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error listing pkeys: {str(e)}")
+            raise StoreError(f"Failed to list pkeys: {str(e)}")
 
     def list_skeys(self, pkey: str) -> list[str]:
-        cursor = self._execute(
-            f"SELECT key2 FROM {self.table_name} WHERE key1 = ?", (pkey,)
-        )
-        return [row[0] for row in cursor.fetchall()]
+        """列出所有次键"""
+        try:
+            cursor = self._execute(
+                f"SELECT key2 FROM {self.table_name} WHERE key1 = ?",
+                (pkey,),
+            )
+            return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error listing skeys for pkey {pkey}: {str(e)}")
+            raise StoreError(f"Failed to list skeys: {str(e)}")
 
     def list_all(self) -> Dict[str, Dict[str, Dict]]:
-        cursor = self._execute(f"SELECT key1, key2, value FROM {self.table_name}")
-        result: Dict[str, Dict[str, Dict]] = {}
-        for row in cursor.fetchall():
-            key1, key2, value_json = row
-            if key1 not in result:
-                result[key1] = {}
-            result[key1][key2] = json.loads(value_json)
-        return result
-
-    def begin_transaction(self) -> None:
-        """开始事务"""
-        self._execute("BEGIN TRANSACTION")
-
-    def commit(self) -> None:
-        """提交事务"""
-        self._execute("COMMIT")
-
-    def rollback(self) -> None:
-        """回滚事务"""
-        self._execute("ROLLBACK")
+        """列出所有键值对"""
+        try:
+            cursor = self._execute(f"SELECT key1, key2, value FROM {self.table_name}")
+            result: Dict[str, Dict[str, Dict]] = {}
+            for row in cursor.fetchall():
+                key1, key2, value_json = row
+                if key1 not in result:
+                    result[key1] = {}
+                result[key1][key2] = json.loads(value_json)
+            return result
+        except Exception as e:
+            logger.error(f"Error listing all KKV pairs: {str(e)}")
+            raise StoreError(f"Failed to list all: {str(e)}")
 
     def batch_set(self, items: Dict[str, Dict[str, Dict]]) -> None:
         """批量设置键值对"""
-        with self.connection:
-            cursor = self.connection.cursor()
+        try:
             values = [
                 (pk, sk, json.dumps(v))
                 for pk, sdict in items.items()
                 for sk, v in sdict.items()
             ]
+            cursor = self.connection.cursor()
             cursor.executemany(
                 f"INSERT OR REPLACE INTO {self.table_name} (key1, key2, value) VALUES (?, ?, ?)",
                 values,
             )
+            self.connection.commit()
+        except Exception as e:
+            logger.error(f"Error in batch set operation: {str(e)}")
+            raise StoreError(f"Failed to perform batch set: {str(e)}")
 
     def batch_delete(self, items: list[tuple[str, str]]) -> int:
         """批量删除键值对"""
-        with self.connection:
+        try:
             cursor = self.connection.cursor()
             cursor.executemany(
                 f"DELETE FROM {self.table_name} WHERE key1 = ? AND key2 = ?",
                 items,
             )
-            return cursor.rowcount
+            deleted = cursor.rowcount
+            self.connection.commit()
+            return deleted
+        except Exception as e:
+            logger.error(f"Error in batch delete operation: {str(e)}")
+            raise StoreError(f"Failed to perform batch delete: {str(e)}")
 
 
 class SQLiteStore(SQLiteTableBase, BaseDB):
     """SQLite数据库维度存储实现"""
 
+    TABLE_INFO_TABLE = "_table_info"  # 存储表信息的表名
+
     def __init__(self, db_path: str = "sqlite_store.db"):
-        super().__init__(db_path)
-        self._table_name_pattern = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
+        """初始化SQLite存储
+
+        Args:
+            db_path: SQLite数据库文件路径，默认为sqlite_store.db
+        """
+        SQLiteTableBase.__init__(self, db_path)
         self._init_table_info_table()
 
     def _init_table_info_table(self) -> None:
@@ -344,12 +479,14 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
             raise StoreError(f"Table '{table_name}' does not exist")
 
     def _validate_table_name(self, table_name: str) -> None:
-        """验证表名是否合法"""
-        if not isinstance(table_name, str):
-            raise StoreError("Table name must be string type")
-        if not self._table_name_pattern.match(table_name):
+        """验证表名是否有效"""
+        if not table_name:
+            raise StoreError("Table name cannot be empty")
+        if len(table_name) > 128:
+            raise StoreError("Table name too long (max 128 characters)")
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", table_name):
             raise StoreError(
-                "Table name must start with a letter and contain only letters, numbers and underscores"
+                "Invalid table name format. Must start with a letter and contain only letters, numbers, and underscores"
             )
 
     def create_kv_table(self, table_name: str) -> None:
