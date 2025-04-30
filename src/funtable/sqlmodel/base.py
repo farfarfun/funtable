@@ -8,7 +8,7 @@ logger = getLogger("funtable")
 
 
 class BaseModel(SQLModel):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[int] = Field(default=None, primary_key=True,des)
     uid: Optional[str] = Field(default="", unique=True)
     gmt_create: Optional[datetime] = Field(default_factory=datetime.now)
     gmt_modified: Optional[datetime] = Field(
