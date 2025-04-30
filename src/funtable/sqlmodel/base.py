@@ -1,18 +1,22 @@
 from datetime import datetime
 from typing import Optional, Union
 
-from sqlmodel import Field, Session, SQLModel, select
 from funutil import getLogger
+from sqlmodel import Field, Session, SQLModel, select
 
 logger = getLogger("funtable")
 
 
 class BaseModel(SQLModel):
-    id: Optional[int] = Field(default=None, primary_key=True,des)
-    uid: Optional[str] = Field(default="", unique=True)
-    gmt_create: Optional[datetime] = Field(default_factory=datetime.now)
+    id: Optional[int] = Field(description="自增ID", default=None, primary_key=True)
+    uid: Optional[str] = Field(description="唯一ID", default="", unique=True)
+    gmt_create: Optional[datetime] = Field(
+        description="创建时间", default_factory=datetime.now
+    )
     gmt_modified: Optional[datetime] = Field(
-        default_factory=datetime.now, sa_column_kwargs={"onupdate": datetime.now}
+        description="修改时间",
+        default_factory=datetime.now,
+        sa_column_kwargs={"onupdate": datetime.now},
     )
 
     @classmethod
