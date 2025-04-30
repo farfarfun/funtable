@@ -57,7 +57,7 @@ class BaseModel(SQLModel):
         result = session.exec(statement).first()
 
         if result is None:
-            result = source
+            result = obj
         else:
             for key, value in obj.model_dump(
                 exclude_unset=True, exclude={"id"}
