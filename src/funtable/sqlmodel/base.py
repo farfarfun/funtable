@@ -60,7 +60,7 @@ class BaseModel(SQLModel):
             result = obj
         else:
             for key, value in obj.model_dump(
-                exclude_unset=True, exclude={"id"}
+                exclude_unset=True, exclude={"id", "gmt_create", "uid"}
             ).items():
                 setattr(result, key, value)
 
