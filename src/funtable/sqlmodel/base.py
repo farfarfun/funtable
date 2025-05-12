@@ -1,10 +1,12 @@
 from datetime import datetime
-from typing import Optional, Union
+from typing import List, Optional, TypeVar, Union
 
 from funutil import getLogger
 from sqlmodel import Field, Session, SQLModel, select
 
 logger = getLogger("funtable")
+
+T = TypeVar("T", bound="BaseModel")
 
 
 class BaseModel(SQLModel):
@@ -20,18 +22,18 @@ class BaseModel(SQLModel):
     )
 
     @classmethod
-    def by_id(cls, _id: int, session):
+    def by_id(cls, _id: int, session) -> T:
         obj = session.get(cls, _id)
         if obj is None:
             logger.error(f"{cls.__name__} with id {_id} not found")
         return obj
 
     @classmethod
-    def all(cls, session):
+    def all(cls, session) -> List[T]:
         return session.exec(select(cls)).all()
 
     @classmethod
-    def create(cls, source: Union[dict, SQLModel], session: Session):
+    def create(cls, source: Union[dict, SQLModel], session: Session) -> T:
         if isinstance(source, SQLModel):
             obj = cls.model_validate(source)
         elif isinstance(source, dict):
@@ -45,7 +47,7 @@ class BaseModel(SQLModel):
         return obj
 
     @classmethod
-    def upsert(cls, source: Union[dict, SQLModel], session: Session):
+    def upsert(cls, source: Union[dict, SQLModel], session: Session) -> T:
         if isinstance(source, SQLModel):
             obj = cls.model_validate(source)
         elif isinstance(source, dict):
@@ -70,7 +72,7 @@ class BaseModel(SQLModel):
 
         return result
 
-    def update(self, source: Union[dict, SQLModel], session: Session):
+    def update(self, source: Union[dict, SQLModel], session: Session) -> T:
         if isinstance(source, SQLModel):
             obj = self.model_validate(source)
         elif isinstance(source, dict):
