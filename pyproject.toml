@@ -1,10 +1,10 @@
 [project]
 name = "funtable"
-version = "1.0.32"
+version = "1.0.33"
 description = "funtable"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = [ "fundrive>=1.2.18", "funutil>=1.0.5", "tinydb>=4.8.2",]
+dependencies = [ "funutil>=1.0.5",]
 [[project.authors]]
 name = "牛哥"
 email = "niuliangtao@qq.com"
@@ -25,6 +25,11 @@ email = "farfarfun@qq.com"
 Organization = "https://github.com/farfarfun"
 Repository = "https://github.com/farfarfun/funtable"
 Releases = "https://github.com/farfarfun/funtable/releases"
+
+[project.optional-dependencies]
+sqlmodel = [ "sqlmodel>=0.0.24",]
+snapshot = [ "fundrive>=2.0.8",]
+kv = [ "tinydb>=4.8.2",]
 
 [tool.setuptools]
 license-files = []
