@@ -91,5 +91,11 @@ class BaseModel(SQLModel):
         session.refresh(self)
         return self
 
+    def delete(self, session: Session) -> Optional[T]:
+        """删除记录"""
+        session.delete(self)
+        session.commit()
+        return self
+
     def parse(self):
         pass
