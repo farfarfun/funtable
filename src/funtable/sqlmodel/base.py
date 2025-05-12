@@ -70,5 +70,24 @@ class BaseModel(SQLModel):
 
         return result
 
+    def update(self, source: Union[dict, SQLModel], session: Session):
+        if isinstance(source, SQLModel):
+            obj = self.model_validate(source)
+        elif isinstance(source, dict):
+            obj = self.model_validate(source)
+        else:
+            return None
+        obj.parse()
+
+        for key, value in obj.model_dump(
+            exclude_unset=True, exclude={"id", "gmt_create", "uid"}
+        ).items():
+            setattr(self, key, value)
+
+        session.merge(self)
+        session.commit()
+        session.refresh(self)
+        return self
+
     def parse(self):
         pass
