@@ -1,4 +1,6 @@
+from abc import abstractmethod
 from datetime import datetime
+from hashlib import md5
 from typing import List, Optional, TypeVar, Union
 
 from funutil import getLogger
@@ -29,35 +31,43 @@ class BaseModel(SQLModel):
         return obj
 
     @classmethod
+    def by_uid(cls, uid: str, session) -> T:
+        obj = session.exec(select(cls).where(cls.uid == uid)).first()
+        if obj is None:
+            logger.error(f"{cls.__name__} with uid = {uid} not found")
+        return obj
+
+    @classmethod
     def all(cls, session) -> List[T]:
         return session.exec(select(cls)).all()
 
     @classmethod
-    def create(cls, source: Union[dict, SQLModel], session: Session) -> T:
+    def __transform(cls, source: Union[dict, SQLModel]) -> Optional[T]:
         if isinstance(source, SQLModel):
             obj = cls.model_validate(source)
         elif isinstance(source, dict):
             obj = cls.model_validate(source)
         else:
             return None
-        obj.parse()
+        obj.__set_unique()
+        return obj
+
+    @classmethod
+    def create(cls, source: Union[dict, SQLModel], session: Session) -> Optional[T]:
+        obj = cls.__transform(source)
+        if obj is None:
+            return obj
         session.add(obj)
         session.commit()
         session.refresh(obj)
         return obj
 
     @classmethod
-    def upsert(cls, source: Union[dict, SQLModel], session: Session) -> T:
-        if isinstance(source, SQLModel):
-            obj = cls.model_validate(source)
-        elif isinstance(source, dict):
-            obj = cls.model_validate(source)
-        else:
-            return None
-        obj.parse()
-        statement = select(cls).where(cls.uid == obj.uid)
-        result = session.exec(statement).first()
-
+    def upsert(cls, source: Union[dict, SQLModel], session: Session) -> Optional[T]:
+        obj = cls.__transform(source)
+        if obj is None:
+            return obj
+        result = cls.by_uid(obj.uid, session)
         if result is None:
             result = obj
         else:
@@ -73,14 +83,9 @@ class BaseModel(SQLModel):
         return result
 
     def update(self, source: Union[dict, SQLModel], session: Session) -> T:
-        if isinstance(source, SQLModel):
-            obj = self.model_validate(source)
-        elif isinstance(source, dict):
-            obj = self.model_validate(source)
-        else:
-            return None
-        obj.parse()
-
+        obj = self.__transform(source)
+        if obj is None:
+            return self
         for key, value in obj.model_dump(
             exclude_unset=True, exclude={"id", "gmt_create", "uid"}
         ).items():
@@ -97,5 +102,9 @@ class BaseModel(SQLModel):
         session.commit()
         return self
 
-    def parse(self):
+    def __set_unique(self) -> None:
+        self.uid = md5(self.unique_str().encode("utf-8")).hexdigest()
+
+    @abstractmethod
+    def unique_str(self) -> str:
         pass
