@@ -63,7 +63,9 @@ class BaseModel(SQLModel):
         return obj
 
     @classmethod
-    def upsert(cls, source: Union[dict, SQLModel], session: Session) -> Optional[T]:
+    def upsert(
+        cls, source: Union[dict, SQLModel], session: Session, commit=False
+    ) -> Optional[T]:
         obj = cls.__transform(source)
         if obj is None:
             return obj
@@ -75,10 +77,10 @@ class BaseModel(SQLModel):
                 exclude_unset=True, exclude={"id", "gmt_create", "uid"}
             ).items():
                 setattr(result, key, value)
-
-        session.add(result)
-        session.commit()
-        session.refresh(result)
+        if commit:
+            session.add(result)
+            session.commit()
+            session.refresh(result)
 
         return result
 
