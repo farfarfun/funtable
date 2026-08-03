@@ -5,13 +5,15 @@ TinyDB存储实现模块
 TinyDB是一个轻量级的文档型数据库，数据以JSON格式存储。
 """
 
+from __future__ import annotations
+
 import os
 import re
 import threading
 from datetime import datetime
+from logging import getLogger
 from typing import Dict, Optional, Union
 
-from funutil import get_logger
 from tinydb import Query, TinyDB
 
 from .interface import (
@@ -21,7 +23,7 @@ from .interface import (
     StoreError,
 )
 
-logger = get_logger("funtable")
+logger = getLogger("funtable")
 
 
 class TinyDBTableBase:
@@ -44,10 +46,6 @@ class TinyDBTableBase:
 
     def _init_thread_local(self):
         """初始化线程本地存储"""
-        if not hasattr(self._local, "in_transaction"):
-            self._local.in_transaction = False
-        if not hasattr(self._local, "transaction_cache"):
-            self._local.transaction_cache = []
         if not hasattr(self._local, "db"):
             self._local.db = None
 
@@ -73,8 +71,6 @@ class TinyDBTableBase:
         self._init_thread_local()
         if self._local.db is not None:
             try:
-                if self._local.in_transaction:
-                    self.rollback()
                 with TinyDBTableBase._db_locks[self.db_path]:
                     if self.db_path in TinyDBTableBase._db_instances:
                         TinyDBTableBase._db_instances[self.db_path].close()
@@ -89,52 +85,13 @@ class TinyDBTableBase:
         self.close()
 
     def begin_transaction(self) -> None:
-        """开始事务"""
-        self._init_thread_local()
-        with self._lock:
-            if self._local.in_transaction:
-                raise StoreError("Already in transaction")
-            self._local.transaction_cache = []
-            self._local.in_transaction = True
+        raise StoreError("TinyDB does not support transactions")
 
     def commit(self) -> None:
-        """提交事务"""
-        self._init_thread_local()
-        with self._lock:
-            if not self._local.in_transaction:
-                raise StoreError("Not in transaction")
-            try:
-                for operation in self._local.transaction_cache:
-                    operation()
-                self._local.transaction_cache = []
-            except Exception as e:
-                logger.error(f"Error committing transaction: {str(e)}")
-                self.rollback()
-                raise StoreError(f"Failed to commit transaction: {str(e)}")
-            finally:
-                self._local.in_transaction = False
+        raise StoreError("TinyDB does not support transactions")
 
     def rollback(self) -> None:
-        """回滚事务"""
-        self._init_thread_local()
-        with self._lock:
-            if not self._local.in_transaction:
-                raise StoreError("Not in transaction")
-            try:
-                self._local.transaction_cache = []
-            except Exception as e:
-                logger.error(f"Error rolling back transaction: {str(e)}")
-                raise StoreError(f"Failed to rollback transaction: {str(e)}")
-            finally:
-                self._local.in_transaction = False
-
-    def _add_to_transaction(self, operation):
-        """添加操作到事务缓存"""
-        self._init_thread_local()
-        if self._local.in_transaction:
-            self._local.transaction_cache.append(operation)
-            return True
-        return False
+        raise StoreError("TinyDB does not support transactions")
 
     def _validate_key(self, key: str) -> None:
         """验证键是否有效"""
@@ -168,8 +125,6 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
         TinyDBTableBase.__init__(self, db_path)
         self.table_name = table_name
         self.query = Query()
-        self._init_thread_local()
-        self._batch_size = 1000
 
     @property
     def table(self):
@@ -181,16 +136,6 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
         try:
             self._validate_key(key)
             self._validate_value(value)
-            self._init_thread_local()
-
-            if self._local.in_transaction:
-                self._add_to_transaction(
-                    lambda: self.table.upsert(
-                        {"key": key, "value": value},
-                        self.query.key == key,
-                    )
-                )
-                return
 
             with self._lock:
                 self.table.upsert(
@@ -206,7 +151,6 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
         """获取键值对"""
         try:
             self._validate_key(key)
-            self._init_thread_local()
 
             with self._lock:
                 result = self.table.get(self.query.key == key)
@@ -220,13 +164,6 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
         """删除键值对"""
         try:
             self._validate_key(key)
-            self._init_thread_local()
-
-            if self._local.in_transaction:
-                self._add_to_transaction(
-                    lambda: self.table.remove(self.query.key == key)
-                )
-                return True
 
             with self._lock:
                 return len(self.table.remove(self.query.key == key)) > 0
@@ -238,31 +175,14 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
     def batch_set(self, items: Dict[str, Dict]) -> None:
         """批量设置键值对"""
         try:
-            batch_data = []
             for key, value in items.items():
                 self._validate_key(key)
                 self._validate_value(value)
-                batch_data.append({"key": key, "value": value})
-
-                # Process in batches to avoid memory issues
-                if len(batch_data) >= self._batch_size:
-                    if self._local.in_transaction:
-                        self._add_to_transaction(
-                            lambda: self.table.insert_multiple(batch_data)
-                        )
-                    else:
-                        with self._lock:
-                            self.table.insert_multiple(batch_data)
-                    batch_data = []
-
-            if batch_data:
-                if self._local.in_transaction:
-                    self._add_to_transaction(
-                        lambda: self.table.insert_multiple(batch_data)
+            with self._lock:
+                for key, value in items.items():
+                    self.table.upsert(
+                        {"key": key, "value": value}, self.query.key == key
                     )
-                else:
-                    with self._lock:
-                        self.table.insert_multiple(batch_data)
 
         except Exception as e:
             logger.error(f"Error in batch set operation: {str(e)}")
@@ -271,19 +191,10 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
     def batch_delete(self, keys: list[str]) -> int:
         """批量删除键值对"""
         try:
-            deleted = 0
-            for i in range(0, len(keys), self._batch_size):
-                batch = keys[i : i + self._batch_size]
-                if self._local.in_transaction:
-                    self._add_to_transaction(
-                        lambda: self.table.remove(self.query.key.one_of(batch))
-                    )
-                else:
-                    with self._lock:
-                        result = self.table.remove(self.query.key.one_of(batch))
-                        deleted += len(result)
-
-            return deleted
+            for key in keys:
+                self._validate_key(key)
+            with self._lock:
+                return len(self.table.remove(self.query.key.one_of(keys)))
 
         except Exception as e:
             logger.error(f"Error in batch delete operation: {str(e)}")
@@ -322,8 +233,6 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
         TinyDBTableBase.__init__(self, db_path)
         self.table_name = table_name
         self.query = Query()
-        self._init_thread_local()
-        self._batch_size = 1000
 
     @property
     def table(self):
@@ -336,16 +245,6 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
             self._validate_key(key1)
             self._validate_key(key2)
             self._validate_value(value)
-            self._init_thread_local()
-
-            if self._local.in_transaction:
-                self._add_to_transaction(
-                    lambda: self.table.upsert(
-                        {"key1": key1, "key2": key2, "value": value},
-                        (self.query.key1 == key1) & (self.query.key2 == key2),
-                    )
-                )
-                return
 
             with self._lock:
                 self.table.upsert(
@@ -362,7 +261,6 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
         try:
             self._validate_key(key1)
             self._validate_key(key2)
-            self._init_thread_local()
 
             with self._lock:
                 result = self.table.get(
@@ -379,15 +277,6 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
         try:
             self._validate_key(key1)
             self._validate_key(key2)
-            self._init_thread_local()
-
-            if self._local.in_transaction:
-                self._add_to_transaction(
-                    lambda: self.table.remove(
-                        (self.query.key1 == key1) & (self.query.key2 == key2)
-                    )
-                )
-                return True
 
             with self._lock:
                 return (
@@ -410,39 +299,24 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
             items: 格式为 {pkey: {skey: value_dict}}
         """
         try:
-            batch_data = []
             for pkey, skey_dict in items.items():
                 for skey, value in skey_dict.items():
                     self._validate_key(pkey)
                     self._validate_key(skey)
                     self._validate_value(value)
-                    batch_data.append({"key1": pkey, "key2": skey, "value": value})
-
-                    # Process in batches to avoid memory issues
-                    if len(batch_data) >= self._batch_size:
-                        if self._local.in_transaction:
-                            self._add_to_transaction(
-                                lambda: self.table.insert_multiple(batch_data)
-                            )
-                        else:
-                            with self._lock:
-                                self.table.insert_multiple(batch_data)
-                        batch_data = []
-
-            if batch_data:
-                if self._local.in_transaction:
-                    self._add_to_transaction(
-                        lambda: self.table.insert_multiple(batch_data)
-                    )
-                else:
-                    with self._lock:
-                        self.table.insert_multiple(batch_data)
+            with self._lock:
+                for pkey, skey_dict in items.items():
+                    for skey, value in skey_dict.items():
+                        self.table.upsert(
+                            {"key1": pkey, "key2": skey, "value": value},
+                            (self.query.key1 == pkey) & (self.query.key2 == skey),
+                        )
 
         except Exception as e:
             logger.error(f"Error in batch set operation: {str(e)}")
             raise StoreError(f"Failed to perform batch set: {str(e)}")
 
-    def batch_delete(self, items: list[tuple[str, str]]) -> None:
+    def batch_delete(self, items: list[tuple[str, str]]) -> int:
         """批量删除键值对
 
         Args:
@@ -450,23 +324,16 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
         """
         try:
             deleted = 0
-            for i in range(0, len(items), self._batch_size):
-                batch = items[i : i + self._batch_size]
-                if self._local.in_transaction:
-                    self._add_to_transaction(
-                        lambda: self.table.remove(
-                            (self.query.key1.one_of([p[0] for p in batch]))
-                            & (self.query.key2.one_of([p[1] for p in batch]))
+            for pkey, skey in items:
+                self._validate_key(pkey)
+                self._validate_key(skey)
+            with self._lock:
+                for pkey, skey in items:
+                    deleted += len(
+                        self.table.remove(
+                            (self.query.key1 == pkey) & (self.query.key2 == skey)
                         )
                     )
-                else:
-                    with self._lock:
-                        result = self.table.remove(
-                            (self.query.key1.one_of([p[0] for p in batch]))
-                            & (self.query.key2.one_of([p[1] for p in batch]))
-                        )
-                        deleted += len(result)
-
             return deleted
 
         except Exception as e:

@@ -1,9 +1,9 @@
 from abc import abstractmethod
 from datetime import datetime
 from hashlib import md5
+from logging import getLogger
 from typing import List, Optional, TypeVar, Union
 
-from funutil import getLogger
 from sqlmodel import Field, Session, SQLModel, select
 
 logger = getLogger("funtable")

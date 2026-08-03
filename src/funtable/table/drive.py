@@ -1,9 +1,9 @@
 import json
 import os.path
+from functools import cached_property
+from logging import getLogger
 
 from fundrive.core import BaseDrive
-from funutil import getLogger
-from funutil.cache import cached_property
 
 logger = getLogger("funtable")
 

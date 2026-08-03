@@ -1,11 +1,11 @@
 import os
 from datetime import datetime
+from logging import getLogger
 
 from fundrive.core import BaseDrive
-from funfile.compress import tarfile
-from funutil import getLogger
+from nltfile.compress import tarfile
 
-from .table import DriveTable
+from ..table import DriveTable
 
 logger = getLogger("funtable")
 

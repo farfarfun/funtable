@@ -5,13 +5,14 @@ SQLite存储实现模块
 使用SQLite的表结构存储键值对数据，值以JSON格式序列化存储。
 """
 
+from __future__ import annotations
+
 import json
 import re
 import sqlite3
 import threading
+from logging import getLogger
 from typing import Dict, Optional, Union
-
-from funutil import get_logger
 
 from .interface import (
     BaseDB,
@@ -20,7 +21,7 @@ from .interface import (
     StoreError,
 )
 
-logger = get_logger("funtable")
+logger = getLogger("funtable")
 
 
 class SQLiteTableBase:
@@ -74,6 +75,20 @@ class SQLiteTableBase:
             return cursor
         except Exception as e:
             logger.error(f"SQLite error executing {sql}: {str(e)}")
+            if not self._local.in_transaction:
+                self.connection.rollback()
+            raise StoreError(f"Database operation failed: {str(e)}")
+
+    def _executemany(self, sql: str, params: list[tuple]) -> sqlite3.Cursor:
+        """批量执行SQL语句"""
+        self._init_thread_local()
+        try:
+            cursor = self.connection.cursor()
+            cursor.executemany(sql, params)
+            if not self._local.in_transaction:
+                self.connection.commit()
+            return cursor
+        except Exception as e:
             if not self._local.in_transaction:
                 self.connection.rollback()
             raise StoreError(f"Database operation failed: {str(e)}")
@@ -229,13 +244,14 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
     def batch_set(self, items: Dict[str, Dict]) -> None:
         """批量设置键值对"""
         try:
+            for key, value in items.items():
+                self._validate_key(key)
+                self._validate_value(value)
             values = [(k, json.dumps(v)) for k, v in items.items()]
-            cursor = self.connection.cursor()
-            cursor.executemany(
+            self._executemany(
                 f"INSERT OR REPLACE INTO {self.table_name} (key, value) VALUES (?, ?)",
                 values,
             )
-            self.connection.commit()
         except Exception as e:
             logger.error(f"Error in batch set operation: {str(e)}")
             raise StoreError(f"Failed to perform batch set: {str(e)}")
@@ -243,14 +259,13 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
     def batch_delete(self, keys: list[str]) -> int:
         """批量删除键值对"""
         try:
-            cursor = self.connection.cursor()
-            cursor.executemany(
+            for key in keys:
+                self._validate_key(key)
+            cursor = self._executemany(
                 f"DELETE FROM {self.table_name} WHERE key = ?",
                 [(k,) for k in keys],
             )
-            deleted = cursor.rowcount
-            self.connection.commit()
-            return deleted
+            return cursor.rowcount
         except Exception as e:
             logger.error(f"Error in batch delete operation: {str(e)}")
             raise StoreError(f"Failed to perform batch delete: {str(e)}")
@@ -376,17 +391,20 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
     def batch_set(self, items: Dict[str, Dict[str, Dict]]) -> None:
         """批量设置键值对"""
         try:
+            for pkey, skeys in items.items():
+                self._validate_key(pkey)
+                for skey, value in skeys.items():
+                    self._validate_key(skey)
+                    self._validate_value(value)
             values = [
                 (pk, sk, json.dumps(v))
                 for pk, sdict in items.items()
                 for sk, v in sdict.items()
             ]
-            cursor = self.connection.cursor()
-            cursor.executemany(
+            self._executemany(
                 f"INSERT OR REPLACE INTO {self.table_name} (key1, key2, value) VALUES (?, ?, ?)",
                 values,
             )
-            self.connection.commit()
         except Exception as e:
             logger.error(f"Error in batch set operation: {str(e)}")
             raise StoreError(f"Failed to perform batch set: {str(e)}")
@@ -394,14 +412,14 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
     def batch_delete(self, items: list[tuple[str, str]]) -> int:
         """批量删除键值对"""
         try:
-            cursor = self.connection.cursor()
-            cursor.executemany(
+            for pkey, skey in items:
+                self._validate_key(pkey)
+                self._validate_key(skey)
+            cursor = self._executemany(
                 f"DELETE FROM {self.table_name} WHERE key1 = ? AND key2 = ?",
                 items,
             )
-            deleted = cursor.rowcount
-            self.connection.commit()
-            return deleted
+            return cursor.rowcount
         except Exception as e:
             logger.error(f"Error in batch delete operation: {str(e)}")
             raise StoreError(f"Failed to perform batch delete: {str(e)}")
@@ -500,7 +518,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         """.format(table_name)
         )
         self._add_table_info(table_name, "kv")
-        logger.success(f"created KV table: {table_name} success")
+        logger.info(f"created KV table: {table_name} success")
 
     def create_kkv_table(self, table_name: str) -> None:
         self._validate_table_name(table_name)
@@ -515,7 +533,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         """.format(table_name)
         )
         self._add_table_info(table_name, "kkv")
-        logger.success(f"created KKV table: {table_name} success")
+        logger.info(f"created KKV table: {table_name} success")
 
     def get_table(self, table_name: str) -> Union[BaseKVTable, BaseKKVTable]:
         self._ensure_table_exists(table_name)

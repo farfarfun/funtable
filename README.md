@@ -10,7 +10,7 @@
 
 - **统一接口**: 跨不同存储后端的一致 API
 - **多种存储类型**: 支持 KV（键值）和 KKV（键键值）存储模式
-- **事务支持**: 内置事务管理，确保数据一致性
+- **事务支持**: SQLite 后端提供事务管理，确保数据一致性
 - **多种后端**: 支持 SQLite、TinyDB、SQLModel 和云存储
 - **快照管理**: 自动备份和版本管理，支持云存储
 - **线程安全**: 为并发访问场景而设计
@@ -44,10 +44,10 @@ pip install funtable[sqlmodel,snapshot,kv]
 ### KV（键值）存储
 
 ```python
-from funtable.kv import SQLiteDB
+from funtable.kv import SQLiteStore
 
 # 初始化数据库
-db = SQLiteDB("my_database.db")
+db = SQLiteStore("my_database.db")
 
 # 创建 KV 表
 db.create_kv_table("users")
@@ -73,10 +73,10 @@ print(all_data)
 ### KKV（键键值）存储
 
 ```python
-from funtable.kv import SQLiteDB
+from funtable.kv import SQLiteStore
 
 # 初始化数据库
-db = SQLiteDB("my_database.db")
+db = SQLiteStore("my_database.db")
 
 # 创建 KKV 表
 db.create_kkv_table("user_profiles")
@@ -102,6 +102,8 @@ print(skeys)  # ["profile", "settings"]
 
 ### 事务支持
 
+事务仅适用于 SQLite 后端。
+
 ```python
 # 使用事务确保数据一致性
 table.begin_transaction()
@@ -121,10 +123,12 @@ from funtable.sqlmodel import BaseModel
 from sqlmodel import Field
 from datetime import datetime
 
+
 class User(BaseModel, table=True):
     name: str = Field(description="用户名")
     email: str = Field(description="用户邮箱")
     age: int = Field(description="用户年龄")
+
 
 # BaseModel 提供内置字段:
 # - id: 自增主键
@@ -140,7 +144,7 @@ with Session(engine) as session:
     user = User(name="Alice", email="alice@example.com", age=30)
     session.add(user)
     session.commit()
-    
+
     # 查询方法
     all_users = User.all(session)
     user_by_id = User.by_id(1, session)
@@ -158,7 +162,7 @@ drive = SomeDriveImplementation()
 snapshot = DriveSnapshot(
     table_fid="my-table-id",
     drive=drive,
-    num=7  # 保留 7 个版本
+    num=7,  # 保留 7 个版本
 )
 
 # 创建快照
@@ -177,7 +181,7 @@ snapshot.download("/path/to/restore")
 
 ### TinyDB 后端
 - **文件**: `funtable.kv.tinydb_table`
-- **特性**: 基于 JSON、轻量级、无外部依赖
+- **特性**: 基于 JSON、轻量级文件存储
 - **适用于**: 小型应用、原型开发、简单数据结构
 
 ### SQLModel 集成
@@ -210,7 +214,7 @@ snapshot.download("/path/to/restore")
 - `list_skeys(pkey: str) -> List[str]`: 获取主键的次键
 - `list_all() -> Dict[str, Dict[str, Dict]]`: 获取所有数据
 - `batch_set(items: Dict) -> None`: 批量插入操作
-- `batch_delete(items: List[tuple]) -> None`: 批量删除操作
+- `batch_delete(items: List[tuple]) -> int`: 批量删除操作，返回删除数量
 
 #### BaseDB
 - `create_kv_table(table_name: str) -> None`: 创建 KV 表

@@ -11,14 +11,13 @@ Classes:
     BaseDB: 数据库维度存储接口抽象类
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, TypeVar, Union
 
-from funutil import getLogger
-
 T = TypeVar("T", bound="BaseKVTable")
 S = TypeVar("S", bound="BaseKKVTable")
-logger = getLogger("funtable")
 
 
 class StoreError(Exception):
@@ -312,7 +311,7 @@ class BaseKKVTable(ABC):
         pass
 
     @abstractmethod
-    def batch_delete(self, items: List[tuple[str, str]]) -> None:
+    def batch_delete(self, items: List[tuple[str, str]]) -> int:
         """批量删除键值对
 
         Args:
@@ -320,6 +319,9 @@ class BaseKKVTable(ABC):
 
         Raises:
             StoreError: 当批量删除操作失败时抛出
+
+        Returns:
+            删除的键值对数量
         """
         pass
 

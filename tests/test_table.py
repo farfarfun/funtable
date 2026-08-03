@@ -1,14 +1,16 @@
 import os
 import unittest
+from logging import getLogger
 from typing import Dict
 
-from funutil import getLogger
+from funtable.kv import SQLiteStore, StoreError
 
-from .interface import StoreError
-
-
-from .sqlite_table import SQLiteStore
-from .tinydb_table import TinyDBStore
+try:
+    from funtable.kv import TinyDBStore
+except ModuleNotFoundError as exc:
+    if exc.name != "tinydb":
+        raise
+    TinyDBStore = None
 
 logger = getLogger("funkv")
 
@@ -198,23 +200,22 @@ class TestSQLiteStore(unittest.TestCase):
         logger.info(f"所有数据: {all_data}")
         self.assertEqual(all_data, test_data)
 
-    def test_concurrent_access(self):
-        """测试并发访问"""
-        pass
-
-    def test_large_data_handling(self):
-        """测试大数据处理"""
-        pass
-
-    def test_connection_failure(self):
-        """测试连接失败情况"""
-        pass
-
     def test_transaction_rollback(self):
         """测试事务回滚"""
-        pass
+        self.store.create_kv_table("test_kv")
+        table = self.store.get_table("test_kv")
+        table.batch_set({"keep": {"value": 1}})
+
+        table.begin_transaction()
+        table.batch_delete(["keep"])
+        table.batch_set({"rollback": {"value": 2}})
+        table.rollback()
+
+        self.assertEqual(table.get("keep"), {"value": 1})
+        self.assertIsNone(table.get("rollback"))
 
 
+@unittest.skipIf(TinyDBStore is None, "tinydb is not installed")
 class TestTinyDBStore(unittest.TestCase):
     """测试TinyDB存储实现
 
@@ -369,6 +370,28 @@ class TestTinyDBStore(unittest.TestCase):
         all_data = kkv_table.list_all()
         logger.info(f"所有数据: {all_data}")
         self.assertEqual(all_data, test_data)
+
+    def test_batch_operations_use_exact_keys(self):
+        self.store.create_kkv_table("test_kkv")
+        table = self.store.get_table("test_kkv")
+        table.batch_set(
+            {
+                "a": {"x": {"value": 1}, "y": {"value": 2}},
+                "b": {"x": {"value": 3}, "y": {"value": 4}},
+            }
+        )
+        table.batch_set({"a": {"x": {"value": 5}}})
+
+        self.assertEqual(table.batch_delete([("a", "x"), ("b", "y")]), 2)
+        self.assertIsNone(table.get("a", "x"))
+        self.assertIsNone(table.get("b", "y"))
+        self.assertEqual(table.get("a", "y"), {"value": 2})
+        self.assertEqual(table.get("b", "x"), {"value": 3})
+
+    def test_transactions_are_explicitly_unsupported(self):
+        self.store.create_kv_table("test_kv")
+        with self.assertRaisesRegex(StoreError, "does not support transactions"):
+            self.store.get_table("test_kv").begin_transaction()
 
 
 if __name__ == "__main__":

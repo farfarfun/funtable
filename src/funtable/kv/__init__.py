@@ -1,15 +1,26 @@
-from .interface import BaseDB, BaseKKVTable, BaseKVTable
+from importlib import import_module
+
+from .interface import BaseDB, BaseKKVTable, BaseKVTable, StoreError
 from .sqlite_table import SQLiteKKVTable, SQLiteKVTable, SQLiteStore
-from .tinydb_table import TinyDBKKVTable, TinyDBKVTable, TinyDBStore
+
+_TINYDB_EXPORTS = {"TinyDBKKVTable", "TinyDBKVTable", "TinyDBStore"}
+
+
+def __getattr__(name):
+    if name in _TINYDB_EXPORTS:
+        return getattr(import_module(".tinydb_table", __name__), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "BaseDB",
     "BaseKKVTable",
     "BaseKVTable",
-    "SQLiteStore",
-    "SQLiteKVTable",
     "SQLiteKKVTable",
-    "TinyDBStore",
+    "SQLiteKVTable",
+    "SQLiteStore",
+    "StoreError",
     "TinyDBKKVTable",
     "TinyDBKVTable",
+    "TinyDBStore",
 ]
