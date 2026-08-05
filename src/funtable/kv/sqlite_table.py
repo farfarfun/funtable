@@ -39,10 +39,18 @@ class SQLiteTableBase:
             raise StoreError("Table name cannot be empty")
         if len(table_name) > 128:
             raise StoreError("Table name too long (max 128 characters)")
-        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", table_name):
+        if not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", table_name):
             raise StoreError(
                 "Invalid table name format. Must start with a letter and contain only letters, numbers, and underscores"
             )
+
+    def _validate_key(self, key: str) -> None:
+        if not isinstance(key, str):
+            raise StoreError(f"Key must be string, got {type(key)}")
+
+    def _validate_value(self, value: Dict) -> None:
+        if not isinstance(value, dict):
+            raise StoreError(f"Value must be dict, got {type(value)}")
 
     def _init_thread_local(self):
         """初始化线程本地存储"""
@@ -159,6 +167,7 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
 
     def __init__(self, db_path: str, table_name: str):
         super().__init__(db_path)
+        self._validate_table_name(table_name)
         self.table_name = table_name
         self._init_table()
 
@@ -172,16 +181,6 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
             )
             """
         )
-
-    def _validate_key(self, key: str):
-        """验证键的类型"""
-        if not isinstance(key, str):
-            raise StoreError(f"Key must be string, got {type(key)}")
-
-    def _validate_value(self, value: Dict):
-        """验证值的类型"""
-        if not isinstance(value, dict):
-            raise StoreError(f"Value must be dict, got {type(value)}")
 
     def set(self, key: str, value: Dict) -> None:
         """设置键值对"""
@@ -283,6 +282,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
 
     def __init__(self, db_path: str, table_name: str):
         super().__init__(db_path)
+        self._validate_table_name(table_name)
         self.table_name = table_name
         self._init_table()
 
@@ -298,16 +298,6 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
             )
             """
         )
-
-    def _validate_key(self, key: str):
-        """验证键的类型"""
-        if not isinstance(key, str):
-            raise StoreError(f"Key must be string, got {type(key)}")
-
-    def _validate_value(self, value: Dict):
-        """验证值的类型"""
-        if not isinstance(value, dict):
-            raise StoreError(f"Value must be dict, got {type(value)}")
 
     def set(self, pkey: str, skey: str, value: Dict) -> None:
         """设置键值对"""
@@ -487,26 +477,6 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
             raise StoreError(f"Table '{table_name}' does not exist")
         return result[0]
 
-    def _ensure_table_exists(self, table_name: str) -> None:
-        """确保表存在"""
-        cursor = self._execute(
-            f"SELECT name FROM {self.TABLE_INFO_TABLE} WHERE name = ?",
-            (table_name,),
-        )
-        if cursor.fetchone() is None:
-            raise StoreError(f"Table '{table_name}' does not exist")
-
-    def _validate_table_name(self, table_name: str) -> None:
-        """验证表名是否有效"""
-        if not table_name:
-            raise StoreError("Table name cannot be empty")
-        if len(table_name) > 128:
-            raise StoreError("Table name too long (max 128 characters)")
-        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", table_name):
-            raise StoreError(
-                "Invalid table name format. Must start with a letter and contain only letters, numbers, and underscores"
-            )
-
     def create_kv_table(self, table_name: str) -> None:
         self._validate_table_name(table_name)
         self._execute(
@@ -536,12 +506,11 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         logger.info(f"created KKV table: {table_name} success")
 
     def get_table(self, table_name: str) -> Union[BaseKVTable, BaseKKVTable]:
-        self._ensure_table_exists(table_name)
+        self._validate_table_name(table_name)
         table_type = self._get_table_type(table_name)
         if table_type == "kv":
             return SQLiteKVTable(self.db_path, table_name)
-        else:
-            return SQLiteKKVTable(self.db_path, table_name)
+        return SQLiteKKVTable(self.db_path, table_name)
 
     def list_tables(self) -> Dict[str, str]:
         cursor = self._execute(
@@ -553,6 +522,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         return {row[0]: row[1] for row in cursor.fetchall()}
 
     def drop_table(self, table_name: str) -> None:
-        self._ensure_table_exists(table_name)
+        self._validate_table_name(table_name)
+        self._get_table_type(table_name)
         self._execute(f"DROP TABLE IF EXISTS {table_name}")
         self._remove_table_info(table_name)

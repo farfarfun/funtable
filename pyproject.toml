@@ -1,15 +1,17 @@
 [build-system]
-requires = [ "setuptools>=61.0", "wheel",]
+requires = [ "setuptools>=77",]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "funtable"
-version = "1.0.42"
+version = "1.0.46"
 description = "A unified table storage abstraction library with support for multiple backends"
 readme = "README.md"
 requires-python = ">=3.8"
+license = "MIT"
+license-files = []
 keywords = [ "table", "storage", "database", "kv", "key-value", "sqlite", "tinydb", "sqlmodel", "orm", "abstraction",]
-classifiers = [ "Development Status :: 4 - Beta", "Intended Audience :: Developers", "License :: OSI Approved :: MIT License", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.8", "Programming Language :: Python :: 3.9", "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Topic :: Database", "Topic :: Software Development :: Libraries :: Python Modules", "Topic :: System :: Archiving :: Backup", "Typing :: Typed",]
+classifiers = [ "Development Status :: 4 - Beta", "Intended Audience :: Developers", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.8", "Programming Language :: Python :: 3.9", "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Topic :: Database", "Topic :: Software Development :: Libraries :: Python Modules", "Topic :: System :: Archiving :: Backup", "Typing :: Typed",]
 [[project.authors]]
 name = "牛哥"
 email = "niuliangtao@qq.com"
@@ -25,9 +27,6 @@ email = "niuliangtao@qq.com"
 [[project.maintainers]]
 name = "farfarfun"
 email = "farfarfun@qq.com"
-
-[project.license]
-text = "MIT"
 
 [project.urls]
 Organization = "https://github.com/farfarfun"
@@ -35,23 +34,15 @@ Repository = "https://github.com/farfarfun/funtable"
 Releases = "https://github.com/farfarfun/funtable/releases"
 
 [project.optional-dependencies]
-sqlmodel = [ "sqlmodel>=0.0.24", "sqlalchemy>=1.4.0",]
-snapshot = [ "fundrive>=2.0.8", "nltfile>=1.0.35",]
+sqlmodel = [ "sqlmodel>=0.0.24",]
+snapshot = [ "fundrive>=2.0.8",]
 kv = [ "tinydb>=4.8.2",]
-dev = [ "pytest>=7.0.0", "pytest-cov>=4.0.0", "black>=22.0.0", "isort>=5.10.0", "flake8>=5.0.0", "mypy>=1.0.0", "pre-commit>=2.20.0",]
+dev = [ "pytest>=7.0.0", "pytest-cov>=4.0.0", "ruff>=0.9.0", "mypy>=1.0.0",]
 all = [ "funtable[sqlmodel,snapshot,kv]",]
 
-[tool.setuptools]
-license-files = []
-
-[tool.isort]
-profile = "black"
-line_length = 88
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-ensure_newline_before_comments = true
+[tool.ruff]
+line-length = 88
+target-version = "py38"
 
 [tool.mypy]
 python_version = "3.8"
@@ -68,8 +59,14 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 [[tool.mypy.overrides]]
-module = [ "tinydb.*", "fundrive.*", "nltfile.*",]
+module = [ "tinydb.*", "fundrive.*",]
 ignore_missing_imports = true
+
+[tool.setuptools]
+license-files = []
+
+[tool.ruff.lint]
+select = [ "E4", "E7", "E9", "F", "I",]
 
 [tool.setuptools.package-data]
 funtable = [ "py.typed",]

@@ -1,9 +1,10 @@
 import os
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from logging import getLogger
 from typing import Dict
 
-from funtable.kv import SQLiteStore, StoreError
+from funtable.kv import SQLiteKVTable, SQLiteStore, StoreError
 
 try:
     from funtable.kv import TinyDBStore
@@ -84,6 +85,8 @@ class TestSQLiteStore(unittest.TestCase):
             logger.info(f"测试无效表名: {name}")
             with self.assertRaises(StoreError):
                 self.store.create_kv_table(name)
+        with self.assertRaises(StoreError):
+            SQLiteKVTable(self.db_path, "invalid; DROP TABLE users")
 
     def test_table_not_found(self):
         """测试访问不存在的表"""
@@ -392,6 +395,28 @@ class TestTinyDBStore(unittest.TestCase):
         self.store.create_kv_table("test_kv")
         with self.assertRaisesRegex(StoreError, "does not support transactions"):
             self.store.get_table("test_kv").begin_transaction()
+
+    def test_shared_connection_survives_concurrent_use_and_close(self):
+        self.store.create_kv_table("test_kv")
+        first = self.store.get_table("test_kv")
+        second = self.store.get_table("test_kv")
+
+        def write(table, prefix):
+            for index in range(20):
+                table.set(f"{prefix}{index}", {"value": index})
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(write, first, "a"),
+                executor.submit(write, second, "b"),
+            ]
+            for future in futures:
+                future.result()
+
+        self.assertEqual(len(first.list_keys()), 40)
+        first.close()
+        second.set("after_close", {"value": 40})
+        self.assertEqual(second.get("after_close"), {"value": 40})
 
 
 if __name__ == "__main__":

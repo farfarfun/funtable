@@ -29,60 +29,47 @@ logger = getLogger("funtable")
 class TinyDBTableBase:
     """TinyDB表基类"""
 
-    # 数据库实例缓存
     _db_instances = {}
-    _db_locks = {}
+    # ponytail: one process-wide lock; use per-path locks if throughput matters.
+    _lock = threading.RLock()
 
     def __init__(self, db_path: str):
         """初始化TinyDB连接"""
         self.db_path = db_path
-        self._local = threading.local()
-        self._init_thread_local()
-        self._lock = threading.RLock()
-
-        # 初始化数据库实例和锁
-        if db_path not in TinyDBTableBase._db_locks:
-            TinyDBTableBase._db_locks[db_path] = threading.RLock()
-
-    def _init_thread_local(self):
-        """初始化线程本地存储"""
-        if not hasattr(self._local, "db"):
-            self._local.db = None
 
     @property
     def db(self) -> TinyDB:
-        """获取数据库连接，每个线程一个独立连接"""
-        self._init_thread_local()
-        if self._local.db is None:
-            try:
-                with TinyDBTableBase._db_locks[self.db_path]:
-                    if self.db_path not in TinyDBTableBase._db_instances:
-                        TinyDBTableBase._db_instances[self.db_path] = TinyDB(
-                            self.db_path
-                        )
-                    self._local.db = TinyDBTableBase._db_instances[self.db_path]
-            except Exception as e:
-                logger.error(f"Failed to connect to TinyDB database: {str(e)}")
-                raise StoreError(f"Database connection failed: {str(e)}")
-        return self._local.db
+        """获取共享的数据库连接"""
+        try:
+            with self._lock:
+                if self.db_path not in self._db_instances:
+                    self._db_instances[self.db_path] = TinyDB(self.db_path)
+                return self._db_instances[self.db_path]
+        except Exception as e:
+            logger.error(f"Failed to connect to TinyDB database: {str(e)}")
+            raise StoreError(f"Database connection failed: {str(e)}")
+
+    @classmethod
+    def _close_db(cls, db_path: str) -> None:
+        with cls._lock:
+            db = cls._db_instances.pop(db_path, None)
+            if db is not None:
+                db.close()
 
     def close(self):
         """关闭数据库连接"""
-        self._init_thread_local()
-        if self._local.db is not None:
-            try:
-                with TinyDBTableBase._db_locks[self.db_path]:
-                    if self.db_path in TinyDBTableBase._db_instances:
-                        TinyDBTableBase._db_instances[self.db_path].close()
-                        del TinyDBTableBase._db_instances[self.db_path]
-                self._local.db = None
-            except Exception as e:
-                logger.error(f"Error closing database connection: {str(e)}")
-                raise StoreError(f"Failed to close database: {str(e)}")
+        try:
+            self._close_db(self.db_path)
+        except Exception as e:
+            logger.error(f"Error closing database connection: {str(e)}")
+            raise StoreError(f"Failed to close database: {str(e)}")
 
     def __del__(self):
         """析构函数"""
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def begin_transaction(self) -> None:
         raise StoreError("TinyDB does not support transactions")
@@ -206,7 +193,8 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
         Returns:
             包含所有键的列表
         """
-        return [doc["key"] for doc in self.table.all()]
+        with self._lock:
+            return [doc["key"] for doc in self.table.all()]
 
     def list_all(self) -> Dict[str, Dict]:
         """获取所有键值对数据
@@ -214,7 +202,8 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
         Returns:
             包含所有键值对的字典，格式为 {key: value_dict}
         """
-        return {doc["key"]: doc["value"] for doc in self.table.all()}
+        with self._lock:
+            return {doc["key"]: doc["value"] for doc in self.table.all()}
 
 
 class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
@@ -342,23 +331,26 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
 
     def list_pkeys(self) -> list[str]:
         """获取所有第一级键列表"""
-        return list(set(doc["key1"] for doc in self.table.all()))
+        with self._lock:
+            return list(set(doc["key1"] for doc in self.table.all()))
 
     def list_skeys(self, pkey: str) -> list[str]:
         """获取指定第一级键下的所有第二级键列表"""
         self._validate_key(pkey)
-        return [doc["key2"] for doc in self.table.search(self.query.key1 == pkey)]
+        with self._lock:
+            return [doc["key2"] for doc in self.table.search(self.query.key1 == pkey)]
 
     def list_all(self) -> Dict[str, Dict[str, Dict]]:
         """获取所有键值对数据"""
-        result = {}
-        for doc in self.table.all():
-            pkey = doc["key1"]
-            skey = doc["key2"]
-            if pkey not in result:
-                result[pkey] = {}
-            result[pkey][skey] = doc["value"]
-        return result
+        with self._lock:
+            result = {}
+            for doc in self.table.all():
+                pkey = doc["key1"]
+                skey = doc["key2"]
+                if pkey not in result:
+                    result[pkey] = {}
+                result[pkey][skey] = doc["value"]
+            return result
 
 
 class TinyDBStore(TinyDBTableBase, BaseDB):
@@ -387,10 +379,11 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
     def _init_table_info_table(self) -> None:
         """初始化存储表信息表"""
         try:
-            table = self.db.table(self.TABLE_INFO_TABLE)
-            if not table.all():
-                logger.info("Initializing table info storage")
-                table.insert({"created_at": datetime.now().isoformat()})
+            with self._lock:
+                table = self.db.table(self.TABLE_INFO_TABLE)
+                if not table.all():
+                    logger.info("Initializing table info storage")
+                    table.insert({"created_at": datetime.now().isoformat()})
         except Exception as e:
             logger.error(f"Failed to initialize table info: {str(e)}")
             raise StoreError(f"Table info initialization failed: {str(e)}")
@@ -398,15 +391,16 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
     def _add_table_info(self, table_name: str, table_type: str) -> None:
         """添加或更新存储表信息"""
         try:
-            table = self.db.table(self.TABLE_INFO_TABLE)
-            table.upsert(
-                {
-                    "name": table_name,
-                    "type": table_type,
-                    "updated_at": datetime.now().isoformat(),
-                },
-                Query().name == table_name,
-            )
+            with self._lock:
+                table = self.db.table(self.TABLE_INFO_TABLE)
+                table.upsert(
+                    {
+                        "name": table_name,
+                        "type": table_type,
+                        "updated_at": datetime.now().isoformat(),
+                    },
+                    Query().name == table_name,
+                )
             logger.info(f"Added/updated table info: {table_name} ({table_type})")
         except Exception as e:
             logger.error(f"Failed to add/update table info: {str(e)}")
@@ -415,8 +409,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
     def _remove_table_info(self, table_name: str) -> None:
         """删除存储表信息"""
         try:
-            table = self.db.table(self.TABLE_INFO_TABLE)
-            table.remove(Query().name == table_name)
+            with self._lock:
+                table = self.db.table(self.TABLE_INFO_TABLE)
+                table.remove(Query().name == table_name)
             logger.info(f"Removed table info: {table_name}")
         except Exception as e:
             logger.error(f"Failed to remove table info: {str(e)}")
@@ -425,11 +420,12 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
     def _get_table_type(self, table_name: str) -> str:
         """获取存储表类型"""
         try:
-            table = self.db.table(self.TABLE_INFO_TABLE)
-            result = table.get(Query().name == table_name)
-            if not result:
-                raise StoreError(f"Table not found: {table_name}")
-            return result["type"]
+            with self._lock:
+                table = self.db.table(self.TABLE_INFO_TABLE)
+                result = table.get(Query().name == table_name)
+                if not result:
+                    raise StoreError(f"Table not found: {table_name}")
+                return result["type"]
         except StoreError:
             raise
         except Exception as e:
@@ -456,12 +452,11 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
         try:
             self._validate_table_name(table_name)
             db_path = self._get_db_path(table_name)
-            if os.path.exists(db_path):
-                raise StoreError(f"Table already exists: {table_name}")
-
-            # 创建表文件
-            TinyDB(db_path).close()
-            self._add_table_info(table_name, "kv")
+            with self._lock:
+                if os.path.exists(db_path):
+                    raise StoreError(f"Table already exists: {table_name}")
+                TinyDB(db_path).close()
+                self._add_table_info(table_name, "kv")
             logger.info(f"Created KV table: {table_name}")
         except StoreError:
             raise
@@ -474,12 +469,11 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
         try:
             self._validate_table_name(table_name)
             db_path = self._get_db_path(table_name)
-            if os.path.exists(db_path):
-                raise StoreError(f"Table already exists: {table_name}")
-
-            # 创建表文件
-            TinyDB(db_path).close()
-            self._add_table_info(table_name, "kkv")
+            with self._lock:
+                if os.path.exists(db_path):
+                    raise StoreError(f"Table already exists: {table_name}")
+                TinyDB(db_path).close()
+                self._add_table_info(table_name, "kkv")
             logger.info(f"Created KKV table: {table_name}")
         except StoreError:
             raise
@@ -491,17 +485,17 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
         """获取指定的存储表接口"""
         try:
             self._validate_table_name(table_name)
-            table_type = self._get_table_type(table_name)
-            db_path = self._get_db_path(table_name)
+            with self._lock:
+                table_type = self._get_table_type(table_name)
+                db_path = self._get_db_path(table_name)
 
-            if not os.path.exists(db_path):
-                raise StoreError(f"Table file not found: {table_name}")
+                if not os.path.exists(db_path):
+                    raise StoreError(f"Table file not found: {table_name}")
 
-            if table_type == "kv":
-                return TinyDBKVTable(table_name, db_path)
-            elif table_type == "kkv":
-                return TinyDBKKVTable(table_name, db_path)
-            else:
+                if table_type == "kv":
+                    return TinyDBKVTable(table_name, db_path)
+                if table_type == "kkv":
+                    return TinyDBKKVTable(table_name, db_path)
                 raise StoreError(f"Invalid table type: {table_type}")
         except StoreError:
             raise
@@ -512,8 +506,11 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
     def list_tables(self) -> Dict[str, str]:
         """获取所有表名列表"""
         try:
-            table = self.db.table(self.TABLE_INFO_TABLE)
-            return {doc["name"]: doc["type"] for doc in table.all() if "name" in doc}
+            with self._lock:
+                table = self.db.table(self.TABLE_INFO_TABLE)
+                return {
+                    doc["name"]: doc["type"] for doc in table.all() if "name" in doc
+                }
         except Exception as e:
             logger.error(f"Failed to list tables: {str(e)}")
             raise StoreError(f"Failed to list tables: {str(e)}")
@@ -523,18 +520,12 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
         try:
             self._validate_table_name(table_name)
             db_path = self._get_db_path(table_name)
-
-            if not os.path.exists(db_path):
-                raise StoreError(f"Table not found: {table_name}")
-
-            # 关闭数据库连接
-            if db_path in TinyDBTableBase._db_instances:
-                TinyDBTableBase._db_instances[db_path].close()
-                del TinyDBTableBase._db_instances[db_path]
-
-            # 删除表文件
-            os.remove(db_path)
-            self._remove_table_info(table_name)
+            with self._lock:
+                if not os.path.exists(db_path):
+                    raise StoreError(f"Table not found: {table_name}")
+                self._close_db(db_path)
+                os.remove(db_path)
+                self._remove_table_info(table_name)
             logger.info(f"Dropped table: {table_name}")
         except StoreError:
             raise
