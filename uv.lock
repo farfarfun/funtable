@@ -10,9 +10,6 @@ resolution-markers = [
     "python_full_version < '3.9'",
 ]
 
-[options]
-prerelease-mode = "allow"
-
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -1226,9 +1223,9 @@ resolution-markers = [
     "python_full_version < '3.9'",
 ]
 dependencies = [
-    { name = "funget", marker = "python_full_version < '3.12'" },
+    { name = "funget", version = "1.1.58", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "funlog-tau", marker = "python_full_version < '3.12'" },
-    { name = "funsecret", marker = "python_full_version < '3.12'" },
+    { name = "funsecret", version = "1.4.67", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "orjson", version = "3.10.15", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "orjson", version = "3.11.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "orjson", version = "3.11.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10' and python_full_version < '3.12'" },
@@ -1244,53 +1241,100 @@ wheels = [
 
 [[package]]
 name = "fundrive"
-version = "2.0.81"
+version = "2.0.86"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15'",
     "python_full_version >= '3.12' and python_full_version < '3.15'",
 ]
 dependencies = [
-    { name = "funget", marker = "python_full_version >= '3.12'" },
+    { name = "funget", version = "1.1.63", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "funsecret", version = "1.4.84", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "nltlog", version = "1.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "nltsecret", marker = "python_full_version >= '3.12'" },
     { name = "orjson", version = "3.11.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "requests", version = "2.34.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tqdm", marker = "python_full_version >= '3.12'" },
+    { name = "urllib3", version = "2.7.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/90/920717def3606f616b286a2f910be99b9cc8f6c8f4b03edc7f1bedbab29b/fundrive-2.0.81-py3-none-any.whl", hash = "sha256:62270b4929eb03b19c4a9c70d8395cd52acb4fd655c3ffaa3a5931518711abfa", size = 217917, upload-time = "2026-08-03T03:08:06.356Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/3a/4790d615be096d93ea9a04219f3408f341776808abeb783364b068e8c3a7/fundrive-2.0.86-py3-none-any.whl", hash = "sha256:c5e124f6688c998f1b3db004117eb1954d96808fb7ddc6b47534a8a5460d3dfc", size = 217923, upload-time = "2026-08-26T10:19:19.162Z" },
 ]
 
 [[package]]
 name = "funfile"
 version = "1.0.27"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.10' and python_full_version < '3.12'",
+    "python_full_version > '3.9' and python_full_version < '3.10'",
+    "python_full_version == '3.9'",
+    "python_full_version < '3.9'",
+]
 dependencies = [
-    { name = "funlog-tau" },
-    { name = "tqdm" },
+    { name = "funlog-tau", marker = "python_full_version < '3.12'" },
+    { name = "tqdm", marker = "python_full_version < '3.12'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/30/d6/c9052de4161bed1a12dcacd84200757f265c2e8984be321efdaaac44a48e/funfile-1.0.27-py3-none-any.whl", hash = "sha256:7f0b7548ee545187cf65227f71f814d2297857f10eb3a6b047b2c71b076876ac", size = 9569, upload-time = "2026-06-05T09:16:27.735Z" },
 ]
 
 [[package]]
+name = "funfile"
+version = "1.0.39"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15'",
+    "python_full_version >= '3.12' and python_full_version < '3.15'",
+]
+dependencies = [
+    { name = "nltlog", version = "1.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "tqdm", marker = "python_full_version >= '3.12'" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/e2/19606f648a3bb8b993c6dcde34eb81f2f5a0ccaf722ff6e4b3730ded2ffc/funfile-1.0.39-py3-none-any.whl", hash = "sha256:1052de435bb72a89e1ac74f6ae8e1beebb866da35a062490d150c04abfeb21b7", size = 18547, upload-time = "2026-08-26T10:14:56.901Z" },
+]
+
+[[package]]
 name = "funget"
 version = "1.1.58"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.10' and python_full_version < '3.12'",
+    "python_full_version > '3.9' and python_full_version < '3.10'",
+    "python_full_version == '3.9'",
+    "python_full_version < '3.9'",
+]
 dependencies = [
-    { name = "funfile" },
+    { name = "funfile", version = "1.0.27", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "nltlog", version = "1.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
-    { name = "nltlog", version = "1.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
+    { name = "nltlog", version = "1.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9' and python_full_version < '3.12'" },
     { name = "requests", version = "2.32.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "requests", version = "2.32.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
-    { name = "requests", version = "2.34.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "requests", version = "2.34.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10' and python_full_version < '3.12'" },
     { name = "typer-slim", version = "0.20.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "typer-slim", version = "0.23.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
-    { name = "typer-slim", version = "0.24.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "typer-slim", version = "0.24.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10' and python_full_version < '3.12'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a8/f9/b791e1b0ceed15661161f4493dd9ec12d8d133ec17207b5b752793f7a783/funget-1.1.58-py3-none-any.whl", hash = "sha256:0a23c6c5f52b35500a71403a0678c4b9b753cc212d9eb48d337e6dddef348ebd", size = 21589, upload-time = "2026-03-26T16:23:25.355Z" },
+]
+
+[[package]]
+name = "funget"
+version = "1.1.63"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15'",
+    "python_full_version >= '3.12' and python_full_version < '3.15'",
+]
+dependencies = [
+    { name = "funfile", version = "1.0.39", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "nltlog", version = "1.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "requests", version = "2.34.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "urllib3", version = "2.7.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ff/9d/db785bb1afd0caee77459e9b2c280ba736f166379efe495c3a59669c5b68/funget-1.1.63-py3-none-any.whl", hash = "sha256:56fb4d077d3edd9296fe15dd122de8746508651886a865cf0234888f0534f43f", size = 22361, upload-time = "2026-08-26T10:14:58.001Z" },
 ]
 
 [[package]]
@@ -1298,7 +1342,7 @@ name = "funlog-tau"
 version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "loguru" },
+    { name = "loguru", marker = "python_full_version < '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f9/06/8a40f17f4051b5a378611207866e912ac07ef44c0e4c2a08aac45e14f479/funlog_tau-1.0.2.tar.gz", hash = "sha256:3566771121f5287c9ecff03625c581767b3ca30815d7e1a66544d845aa5d53fe", size = 2028, upload-time = "2026-02-13T15:03:22.301Z" }
 wheels = [
@@ -1309,6 +1353,12 @@ wheels = [
 name = "funsecret"
 version = "1.4.67"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.10' and python_full_version < '3.12'",
+    "python_full_version > '3.9' and python_full_version < '3.10'",
+    "python_full_version == '3.9'",
+    "python_full_version < '3.9'",
+]
 dependencies = [
     { name = "cryptography", version = "47.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version <= '3.9'" },
     { name = "cryptography", version = "50.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version > '3.9' and python_full_version < '3.12'" },
@@ -1326,6 +1376,27 @@ wheels = [
 ]
 
 [[package]]
+name = "funsecret"
+version = "1.4.84"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15'",
+    "python_full_version >= '3.12' and python_full_version < '3.15'",
+]
+dependencies = [
+    { name = "cryptography", version = "50.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "diskcache", marker = "python_full_version >= '3.12'" },
+    { name = "nltcache", marker = "python_full_version >= '3.12'" },
+    { name = "nltlog", version = "1.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "sqlalchemy", marker = "python_full_version >= '3.12'" },
+    { name = "tqdm", marker = "python_full_version >= '3.12'" },
+    { name = "typer", version = "0.27.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/42/7816a161eb53a6eb4388d15cc222f53cc02a167d894ece3ce8096e63bf1b/funsecret-1.4.84-py3-none-any.whl", hash = "sha256:3fdd9f6079d86b83b4c3f71ba53a8a43985301ea2dfc1c5d28a5ba298fb470f6", size = 15526, upload-time = "2026-08-26T10:14:59.163Z" },
+]
+
+[[package]]
 name = "funtable"
 version = "1.0.46"
 source = { editable = "." }
@@ -1333,7 +1404,7 @@ source = { editable = "." }
 [package.optional-dependencies]
 all = [
     { name = "fundrive", version = "2.0.57", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "fundrive", version = "2.0.81", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "fundrive", version = "2.0.86", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "sqlmodel", version = "0.0.29", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "sqlmodel", version = "0.0.34", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "sqlmodel", version = "0.0.39", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -1355,7 +1426,7 @@ kv = [
 ]
 snapshot = [
     { name = "fundrive", version = "2.0.57", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "fundrive", version = "2.0.81", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "fundrive", version = "2.0.86", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 sqlmodel = [
     { name = "sqlmodel", version = "0.0.29", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
@@ -2006,23 +2077,6 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/5a/03c191b427546e1743dfaad81e36569d8bdf4ecf0de39fe12eb8d684091f/nltlog-1.1.6-py3-none-any.whl", hash = "sha256:3d69b26847f88ebf188c71d797fd73a60d249d3224f8b6731fec64e642d3459f", size = 5056, upload-time = "2026-08-03T02:43:02.75Z" },
-]
-
-[[package]]
-name = "nltsecret"
-version = "1.4.83"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cryptography", version = "50.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "diskcache", marker = "python_full_version >= '3.12'" },
-    { name = "nltcache", marker = "python_full_version >= '3.12'" },
-    { name = "nltlog", version = "1.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "sqlalchemy", marker = "python_full_version >= '3.12'" },
-    { name = "tqdm", marker = "python_full_version >= '3.12'" },
-    { name = "typer", version = "0.27.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b1/6f/1c661251f29382abdb8d0dabf6c0a768f2d8856f13611932bf2bbfc6478d/nltsecret-1.4.83-py3-none-any.whl", hash = "sha256:a0bd91ba496a40f5088d91842ccecc81b7b78de5231cf81d23b4c523c7868ce1", size = 11127, upload-time = "2026-08-03T03:13:08.862Z" },
 ]
 
 [[package]]
@@ -3309,12 +3363,10 @@ name = "typer-slim"
 version = "0.24.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15'",
-    "python_full_version >= '3.12' and python_full_version < '3.15'",
     "python_full_version >= '3.10' and python_full_version < '3.12'",
 ]
 dependencies = [
-    { name = "typer", version = "0.27.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "typer", version = "0.27.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10' and python_full_version < '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a7/a7/e6aecc4b4eb59598829a3b5076a93aff291b4fdaa2ded25efc4e1f4d219c/typer_slim-0.24.0.tar.gz", hash = "sha256:f0ed36127183f52ae6ced2ecb2521789995992c521a46083bfcdbb652d22ad34", size = 4776, upload-time = "2026-02-16T22:08:51.2Z" }
 wheels = [

@@ -62,9 +62,6 @@ strict_equality = true
 module = [ "tinydb.*", "fundrive.*",]
 ignore_missing_imports = true
 
-[tool.setuptools]
-license-files = []
-
 [tool.ruff.lint]
 select = [ "E4", "E7", "E9", "F", "I",]
 
