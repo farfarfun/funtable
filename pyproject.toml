@@ -7,7 +7,7 @@ name = "funtable"
 version = "1.0.46"
 description = "A unified table storage abstraction library with support for multiple backends"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = "MIT"
 license-files = []
 keywords = [ "table", "storage", "database", "kv", "key-value", "sqlite", "tinydb", "sqlmodel", "orm", "abstraction",]
