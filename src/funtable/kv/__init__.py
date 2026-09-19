@@ -1,4 +1,5 @@
 from importlib import import_module
+from typing import Any
 
 from .interface import BaseDB, BaseKKVTable, BaseKVTable, StoreError
 from .sqlite_table import SQLiteKKVTable, SQLiteKVTable, SQLiteStore
@@ -6,7 +7,7 @@ from .sqlite_table import SQLiteKKVTable, SQLiteKVTable, SQLiteStore
 _TINYDB_EXPORTS = {"TinyDBKKVTable", "TinyDBKVTable", "TinyDBStore"}
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     if name in _TINYDB_EXPORTS:
         return getattr(import_module(".tinydb_table", __name__), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

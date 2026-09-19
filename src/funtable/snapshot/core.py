@@ -3,9 +3,10 @@ from __future__ import annotations
 import sys
 import tarfile
 from datetime import datetime
-from logging import getLogger
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from farlog import getLogger
 
 from ..table import DriveTable
 
@@ -16,7 +17,10 @@ logger = getLogger("funtable")
 
 
 class DriveSnapshot:
-    def __init__(self, table_fid, drive: BaseDrive, num=7):
+    """在云盘表中创建、恢复并轮换文件快照。"""
+
+    def __init__(self, table_fid: str, drive: BaseDrive, num: int = 7) -> None:
+        """初始化快照管理器，num 表示最多保留的版本数。"""
         if num < 1:
             raise ValueError("num must be at least 1")
         self.num = num
@@ -24,7 +28,8 @@ class DriveSnapshot:
         self.table = DriveTable(table_fid=table_fid, drive=drive)
         self.table.update_partition_dict()
 
-    def delete_outed_version(self):
+    def delete_outed_version(self) -> None:
+        """删除超过保留数量的旧快照。"""
         files = sorted(
             self.table.partition_meta(), key=lambda file: file["name"], reverse=True
         )
@@ -33,18 +38,18 @@ class DriveSnapshot:
             self.drive.delete(file["fid"])
 
     @staticmethod
-    def _tar_path(file_path):
+    def _tar_path(file_path: str | Path) -> str:
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         return f"{file_path}-{timestamp}.tar.xz"
 
     @staticmethod
-    def _archive(file_path, archive_path):
+    def _archive(file_path: str | Path, archive_path: str | Path) -> None:
         source = Path(file_path)
         with tarfile.open(archive_path, "w:xz") as archive:
             archive.add(source, arcname=source.name)
 
     @staticmethod
-    def _extract(archive_path, dir_path):
+    def _extract(archive_path: str | Path, dir_path: str | Path) -> None:
         destination = Path(dir_path).resolve()
         with tarfile.open(archive_path, "r:*") as archive:
             for member in archive.getmembers():
@@ -64,7 +69,8 @@ class DriveSnapshot:
             else:
                 archive.extractall(destination)
 
-    def update(self, file_path, partition=None):
+    def update(self, file_path: str | Path, partition: str | None = None) -> None:
+        """归档文件或目录并上传为新快照。"""
         archive_path = Path(self._tar_path(file_path))
         try:
             self._archive(file_path, archive_path)
@@ -78,7 +84,8 @@ class DriveSnapshot:
         self.table.update_partition_meta()
         self.delete_outed_version()
 
-    def download(self, dir_path):
+    def download(self, dir_path: str | Path) -> None:
+        """下载并解压最新快照到目标目录。"""
         files = sorted(
             self.table.partition_meta(), key=lambda file: file["name"], reverse=True
         )

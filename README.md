@@ -199,28 +199,28 @@ snapshot.download("/path/to/restore")
 ### 核心接口
 
 #### BaseKVTable
-- `set(key: str, value: Dict) -> None`: 存储键值对
-- `get(key: str) -> Optional[Dict]`: 通过键检索值
+- `set(key: str, value: dict) -> None`: 存储键值对
+- `get(key: str) -> dict | None`: 通过键检索值
 - `delete(key: str) -> bool`: 删除键值对
-- `list_keys() -> List[str]`: 获取所有键
-- `list_all() -> Dict[str, Dict]`: 获取所有键值对
+- `list_keys() -> list[str]`: 获取所有键
+- `list_all() -> dict[str, dict]`: 获取所有键值对
 - `begin_transaction()`, `commit()`, `rollback()`: 事务管理
 
 #### BaseKKVTable
-- `set(pkey: str, skey: str, value: Dict) -> None`: 使用两级键存储
-- `get(pkey: str, skey: str) -> Optional[Dict]`: 通过两级键检索
+- `set(pkey: str, skey: str, value: dict) -> None`: 使用两级键存储
+- `get(pkey: str, skey: str) -> dict | None`: 通过两级键检索
 - `delete(pkey: str, skey: str) -> bool`: 通过两级键删除
-- `list_pkeys() -> List[str]`: 获取所有主键
-- `list_skeys(pkey: str) -> List[str]`: 获取主键的次键
-- `list_all() -> Dict[str, Dict[str, Dict]]`: 获取所有数据
-- `batch_set(items: Dict) -> None`: 批量插入操作
-- `batch_delete(items: List[tuple]) -> int`: 批量删除操作，返回删除数量
+- `list_pkeys() -> list[str]`: 获取所有主键
+- `list_skeys(pkey: str) -> list[str]`: 获取主键的次键
+- `list_all() -> dict[str, dict[str, dict]]`: 获取所有数据
+- `batch_set(items: dict) -> None`: 批量插入操作
+- `batch_delete(items: list[tuple]) -> int`: 批量删除操作，返回删除数量
 
 #### BaseDB
 - `create_kv_table(table_name: str) -> None`: 创建 KV 表
 - `create_kkv_table(table_name: str) -> None`: 创建 KKV 表
-- `get_table(table_name: str) -> Union[BaseKVTable, BaseKKVTable]`: 获取表实例
-- `list_tables() -> Dict[str, str]`: 列出所有表及其类型
+- `get_table(table_name: str) -> BaseKVTable | BaseKKVTable`: 获取表实例
+- `list_tables() -> dict[str, str]`: 列出所有表及其类型
 - `drop_table(table_name: str) -> None`: 删除表
 
 ## 错误处理
@@ -256,3 +256,16 @@ except StoreError as e:
 - **PyPI**: https://pypi.org/project/funtable/
 - **问题**: https://github.com/farfarfun/funtable/issues
 - **发布**: https://github.com/farfarfun/funtable/releases
+
+---
+
+## 关于 farfarfun
+
+[farfarfun](https://github.com/farfarfun) 是一个专注于实用工具库的开源组织，
+涵盖云存储、数据处理、AI、多媒体与开发工具链等方向。
+
+- 🏠 组织主页：<https://github.com/farfarfun>
+- 📦 PyPI：<https://pypi.org/user/niuliangtao/>
+- 📧 联系：farfarfun@qq.com
+
+本项目基于 [MIT](LICENSE) 协议开源。

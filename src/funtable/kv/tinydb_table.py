@@ -11,10 +11,12 @@ import os
 import re
 import threading
 from datetime import datetime
-from logging import getLogger
-from typing import Dict, Optional, Union
+from pathlib import Path
+from typing import Any, cast
 
+from farlog import getLogger
 from tinydb import Query, TinyDB
+from tinydb.table import Table
 
 from .interface import (
     BaseDB,
@@ -29,7 +31,7 @@ logger = getLogger("funtable")
 class TinyDBTableBase:
     """TinyDB表基类"""
 
-    _db_instances = {}
+    _db_instances: dict[str, TinyDB] = {}
     # ponytail: one process-wide lock; use per-path locks if throughput matters.
     _lock = threading.RLock()
 
@@ -56,7 +58,7 @@ class TinyDBTableBase:
             if db is not None:
                 db.close()
 
-    def close(self):
+    def close(self) -> None:
         """关闭数据库连接"""
         try:
             self._close_db(self.db_path)
@@ -64,7 +66,7 @@ class TinyDBTableBase:
             logger.error(f"Error closing database connection: {str(e)}")
             raise StoreError(f"Failed to close database: {str(e)}")
 
-    def __del__(self):
+    def __del__(self) -> None:
         """析构函数"""
         try:
             self.close()
@@ -89,7 +91,7 @@ class TinyDBTableBase:
         if len(key) > 128:
             raise StoreError("Key too long (max 128 characters)")
 
-    def _validate_value(self, value: Dict) -> None:
+    def _validate_value(self, value: dict) -> None:
         """验证值是否有效"""
         if not isinstance(value, dict):
             raise StoreError("Value must be dictionary type")
@@ -114,11 +116,11 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
         self.query = Query()
 
     @property
-    def table(self):
+    def table(self) -> Table:
         """获取表对象"""
         return self.db.table(self.table_name)
 
-    def set(self, key: str, value: Dict) -> None:
+    def set(self, key: str, value: dict) -> None:
         """设置键值对"""
         try:
             self._validate_key(key)
@@ -134,14 +136,16 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
             logger.error(f"Error setting KV pair: {str(e)}")
             raise StoreError(f"Failed to set value: {str(e)}")
 
-    def get(self, key: str) -> Optional[Dict]:
+    def get(self, key: str) -> dict | None:
         """获取键值对"""
         try:
             self._validate_key(key)
 
             with self._lock:
-                result = self.table.get(self.query.key == key)
-                return result["value"] if result else None
+                result = cast(
+                    dict[str, Any] | None, self.table.get(self.query.key == key)
+                )
+                return cast(dict[str, Any], result["value"]) if result else None
 
         except Exception as e:
             logger.error(f"Error getting value: {str(e)}")
@@ -159,7 +163,7 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
             logger.error(f"Error deleting KV pair: {str(e)}")
             raise StoreError(f"Failed to delete value: {str(e)}")
 
-    def batch_set(self, items: Dict[str, Dict]) -> None:
+    def batch_set(self, items: dict[str, dict]) -> None:
         """批量设置键值对"""
         try:
             for key, value in items.items():
@@ -196,7 +200,7 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
         with self._lock:
             return [doc["key"] for doc in self.table.all()]
 
-    def list_all(self) -> Dict[str, Dict]:
+    def list_all(self) -> dict[str, dict]:
         """获取所有键值对数据
 
         Returns:
@@ -224,11 +228,11 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
         self.query = Query()
 
     @property
-    def table(self):
+    def table(self) -> Table:
         """获取表对象"""
         return self.db.table(self.table_name)
 
-    def set(self, key1: str, key2: str, value: Dict) -> None:
+    def set(self, key1: str, key2: str, value: dict) -> None:
         """设置键值对"""
         try:
             self._validate_key(key1)
@@ -245,17 +249,20 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
             logger.error(f"Error setting KKV pair: {str(e)}")
             raise StoreError(f"Failed to set value: {str(e)}")
 
-    def get(self, key1: str, key2: str) -> Optional[Dict]:
+    def get(self, key1: str, key2: str) -> dict | None:
         """获取键值对"""
         try:
             self._validate_key(key1)
             self._validate_key(key2)
 
             with self._lock:
-                result = self.table.get(
-                    (self.query.key1 == key1) & (self.query.key2 == key2)
+                result = cast(
+                    dict[str, Any] | None,
+                    self.table.get(
+                        (self.query.key1 == key1) & (self.query.key2 == key2)
+                    ),
                 )
-                return result["value"] if result else None
+                return cast(dict[str, Any], result["value"]) if result else None
 
         except Exception as e:
             logger.error(f"Error getting value: {str(e)}")
@@ -281,7 +288,7 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
             logger.error(f"Error deleting KKV pair: {str(e)}")
             raise StoreError(f"Failed to delete value: {str(e)}")
 
-    def batch_set(self, items: Dict[str, Dict[str, Dict]]) -> None:
+    def batch_set(self, items: dict[str, dict[str, dict]]) -> None:
         """批量设置键值对
 
         Args:
@@ -340,10 +347,10 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
         with self._lock:
             return [doc["key2"] for doc in self.table.search(self.query.key1 == pkey)]
 
-    def list_all(self) -> Dict[str, Dict[str, Dict]]:
+    def list_all(self) -> dict[str, dict[str, dict]]:
         """获取所有键值对数据"""
         with self._lock:
-            result = {}
+            result: dict[str, dict[str, dict]] = {}
             for doc in self.table.all():
                 pkey = doc["key1"]
                 skey = doc["key2"]
@@ -422,10 +429,12 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
         try:
             with self._lock:
                 table = self.db.table(self.TABLE_INFO_TABLE)
-                result = table.get(Query().name == table_name)
+                result = cast(
+                    dict[str, Any] | None, table.get(Query().name == table_name)
+                )
                 if not result:
                     raise StoreError(f"Table not found: {table_name}")
-                return result["type"]
+                return str(result["type"])
         except StoreError:
             raise
         except Exception as e:
@@ -455,7 +464,7 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
             with self._lock:
                 if os.path.exists(db_path):
                     raise StoreError(f"Table already exists: {table_name}")
-                TinyDB(db_path).close()
+                Path(db_path).write_text("{}", encoding="utf-8")
                 self._add_table_info(table_name, "kv")
             logger.info(f"Created KV table: {table_name}")
         except StoreError:
@@ -472,7 +481,7 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
             with self._lock:
                 if os.path.exists(db_path):
                     raise StoreError(f"Table already exists: {table_name}")
-                TinyDB(db_path).close()
+                Path(db_path).write_text("{}", encoding="utf-8")
                 self._add_table_info(table_name, "kkv")
             logger.info(f"Created KKV table: {table_name}")
         except StoreError:
@@ -481,7 +490,7 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
             logger.error(f"Failed to create KKV table: {str(e)}")
             raise StoreError(f"Failed to create table: {str(e)}")
 
-    def get_table(self, table_name: str) -> Union[TinyDBKVTable, TinyDBKKVTable]:
+    def get_table(self, table_name: str) -> TinyDBKVTable | TinyDBKKVTable:
         """获取指定的存储表接口"""
         try:
             self._validate_table_name(table_name)
@@ -503,7 +512,7 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
             logger.error(f"Failed to get table: {str(e)}")
             raise StoreError(f"Failed to get table: {str(e)}")
 
-    def list_tables(self) -> Dict[str, str]:
+    def list_tables(self) -> dict[str, str]:
         """获取所有表名列表"""
         try:
             with self._lock:

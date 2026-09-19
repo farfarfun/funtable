@@ -1,17 +1,18 @@
 [build-system]
-requires = [ "setuptools>=77",]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "funtable"
-version = "1.0.46"
+version = "1.0.47"
 description = "A unified table storage abstraction library with support for multiple backends"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-license-files = []
+license-files = ["LICENSE"]
 keywords = [ "table", "storage", "database", "kv", "key-value", "sqlite", "tinydb", "sqlmodel", "orm", "abstraction",]
-classifiers = [ "Development Status :: 4 - Beta", "Intended Audience :: Developers", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.8", "Programming Language :: Python :: 3.9", "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Topic :: Database", "Topic :: Software Development :: Libraries :: Python Modules", "Topic :: System :: Archiving :: Backup", "Typing :: Typed",]
+classifiers = [ "Development Status :: 4 - Beta", "Intended Audience :: Developers", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Topic :: Database", "Topic :: Software Development :: Libraries :: Python Modules", "Topic :: System :: Archiving :: Backup", "Typing :: Typed",]
+dependencies = [ "farlog>=1.1.7",]
 [[project.authors]]
 name = "牛哥"
 email = "niuliangtao@qq.com"
@@ -42,10 +43,10 @@ all = [ "funtable[sqlmodel,snapshot,kv]",]
 
 [tool.ruff]
 line-length = 88
-target-version = "py38"
+target-version = "py310"
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -59,11 +60,11 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 [[tool.mypy.overrides]]
-module = [ "tinydb.*", "fundrive.*",]
+module = [ "tinydb.*", "fundrive.*", "farlog.*",]
 ignore_missing_imports = true
 
 [tool.ruff.lint]
 select = [ "E4", "E7", "E9", "F", "I",]
 
-[tool.setuptools.package-data]
-funtable = [ "py.typed",]
+[tool.hatch.build.targets.wheel]
+packages = ["src/funtable"]

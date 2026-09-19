@@ -1,9 +1,9 @@
 from abc import abstractmethod
 from datetime import datetime
 from hashlib import md5
-from logging import getLogger
-from typing import List, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
+from farlog import getLogger
 from sqlmodel import Field, Session, SQLModel, select
 
 logger = getLogger("funtable")
@@ -12,40 +12,43 @@ T = TypeVar("T", bound="BaseModel")
 
 
 class BaseModel(SQLModel):
-    id: Optional[int] = Field(description="自增ID", default=None, primary_key=True)
-    uid: Optional[str] = Field(description="唯一ID", default="", unique=True)
-    gmt_create: Optional[datetime] = Field(
+    """提供常用查询、写入和唯一标识能力的 SQLModel 基类。"""
+
+    id: int | None = Field(description="自增ID", default=None, primary_key=True)
+    uid: str | None = Field(description="唯一ID", default="", unique=True)
+    gmt_create: datetime | None = Field(
         description="创建时间", default_factory=datetime.now
     )
-    gmt_modified: Optional[datetime] = Field(
+    gmt_modified: datetime | None = Field(
         description="修改时间",
         default_factory=datetime.now,
         sa_column_kwargs={"onupdate": datetime.now},
     )
 
     @classmethod
-    def by_id(cls, _id: int, session) -> T:
+    def by_id(cls: type[T], _id: int, session: Session) -> T | None:
+        """按自增 ID 查询记录，不存在时返回 ``None``。"""
         obj = session.get(cls, _id)
         if obj is None:
             logger.error(f"{cls.__name__} with id {_id} not found")
         return obj
 
     @classmethod
-    def by_uid(cls, uid: str, session) -> T:
+    def by_uid(cls: type[T], uid: str, session: Session) -> T | None:
+        """按唯一 ID 查询记录，不存在时返回 ``None``。"""
         obj = session.exec(select(cls).where(cls.uid == uid)).first()
         if obj is None:
             logger.error(f"{cls.__name__} with uid = {uid} not found")
         return obj
 
     @classmethod
-    def all(cls, session) -> List[T]:
-        return session.exec(select(cls)).all()
+    def all(cls: type[T], session: Session) -> list[T]:
+        """返回当前模型的全部记录。"""
+        return list(session.exec(select(cls)).all())
 
     @classmethod
-    def __transform(cls, source: Union[dict, SQLModel]) -> Optional[T]:
-        if isinstance(source, SQLModel):
-            obj = cls.model_validate(source)
-        elif isinstance(source, dict):
+    def __transform(cls: type[T], source: object) -> T | None:
+        if isinstance(source, (dict, SQLModel)):
             obj = cls.model_validate(source)
         else:
             return None
@@ -53,10 +56,13 @@ class BaseModel(SQLModel):
         return obj
 
     @classmethod
-    def create(cls, source: Union[dict, SQLModel], session: Session) -> Optional[T]:
+    def create(
+        cls: type[T], source: dict[str, Any] | SQLModel, session: Session
+    ) -> T | None:
+        """创建、提交并刷新一条记录。"""
         obj = cls.__transform(source)
         if obj is None:
-            return obj
+            return None
         session.add(obj)
         session.commit()
         session.refresh(obj)
@@ -64,11 +70,16 @@ class BaseModel(SQLModel):
 
     @classmethod
     def upsert(
-        cls, source: Union[dict, SQLModel], session: Session, commit=False
-    ) -> Optional[T]:
+        cls: type[T],
+        source: dict[str, Any] | SQLModel,
+        session: Session,
+        commit: bool = False,
+    ) -> T | None:
+        """按唯一 ID 新增或更新记录，可选择立即提交。"""
         obj = cls.__transform(source)
         if obj is None:
-            return obj
+            return None
+        assert obj.uid is not None
         result = cls.by_uid(obj.uid, session)
         if result is None:
             result = obj
@@ -84,7 +95,8 @@ class BaseModel(SQLModel):
 
         return result
 
-    def update(self, source: Union[dict, SQLModel], session: Session) -> T:
+    def update(self: T, source: dict[str, Any] | SQLModel, session: Session) -> T:
+        """用传入字段更新当前记录并提交。"""
         obj = self.__transform(source)
         if obj is None:
             return self
@@ -98,15 +110,18 @@ class BaseModel(SQLModel):
         session.refresh(self)
         return self
 
-    def delete(self, session: Session) -> Optional[T]:
+    def delete(self: T, session: Session) -> T:
         """删除记录"""
         session.delete(self)
         session.commit()
         return self
 
     def __set_unique(self) -> None:
-        self.uid = md5(self.unique_str().encode("utf-8")).hexdigest()
+        self.uid = md5(
+            self.unique_str().encode("utf-8"), usedforsecurity=False
+        ).hexdigest()
 
     @abstractmethod
     def unique_str(self) -> str:
-        pass
+        """返回用于生成唯一 ID 的稳定字符串。"""
+        raise NotImplementedError

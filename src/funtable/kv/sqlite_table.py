@@ -11,8 +11,8 @@ import json
 import re
 import sqlite3
 import threading
-from logging import getLogger
-from typing import Dict, Optional, Union
+
+from farlog import getLogger
 
 from .interface import (
     BaseDB,
@@ -24,13 +24,21 @@ from .interface import (
 logger = getLogger("funtable")
 
 
+class _SQLiteLocal(threading.local):
+    """每个线程独立保存连接和事务状态。"""
+
+    def __init__(self) -> None:
+        self.in_transaction = False
+        self.connection: sqlite3.Connection | None = None
+
+
 class SQLiteTableBase:
     """SQLite表基类"""
 
     def __init__(self, db_path: str):
         """初始化SQLite连接"""
         self.db_path = db_path
-        self._local = threading.local()
+        self._local = _SQLiteLocal()
         self._init_thread_local()
 
     def _validate_table_name(self, table_name: str) -> None:
@@ -48,11 +56,11 @@ class SQLiteTableBase:
         if not isinstance(key, str):
             raise StoreError(f"Key must be string, got {type(key)}")
 
-    def _validate_value(self, value: Dict) -> None:
+    def _validate_value(self, value: dict) -> None:
         if not isinstance(value, dict):
             raise StoreError(f"Value must be dict, got {type(value)}")
 
-    def _init_thread_local(self):
+    def _init_thread_local(self) -> None:
         """初始化线程本地存储"""
         if not hasattr(self._local, "in_transaction"):
             self._local.in_transaction = False
@@ -101,7 +109,7 @@ class SQLiteTableBase:
                 self.connection.rollback()
             raise StoreError(f"Database operation failed: {str(e)}")
 
-    def close(self):
+    def close(self) -> None:
         """关闭数据库连接"""
         self._init_thread_local()
         if self._local.connection is not None:
@@ -114,7 +122,7 @@ class SQLiteTableBase:
                 logger.error(f"Error closing database connection: {str(e)}")
                 raise StoreError(f"Failed to close database: {str(e)}")
 
-    def __del__(self):
+    def __del__(self) -> None:
         """析构函数"""
         self.close()
 
@@ -171,7 +179,7 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
         self.table_name = table_name
         self._init_table()
 
-    def _init_table(self):
+    def _init_table(self) -> None:
         """初始化表结构"""
         self._execute(
             f"""
@@ -182,7 +190,7 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
             """
         )
 
-    def set(self, key: str, value: Dict) -> None:
+    def set(self, key: str, value: dict) -> None:
         """设置键值对"""
         try:
             self._validate_key(key)
@@ -195,7 +203,7 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
             logger.error(f"Error setting KV pair: {str(e)}")
             raise StoreError(f"Failed to set value: {str(e)}")
 
-    def get(self, key: str) -> Optional[Dict]:
+    def get(self, key: str) -> dict | None:
         """获取键的值"""
         try:
             self._validate_key(key)
@@ -231,7 +239,7 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
             logger.error(f"Error listing keys: {str(e)}")
             raise StoreError(f"Failed to list keys: {str(e)}")
 
-    def list_all(self) -> Dict[str, Dict]:
+    def list_all(self) -> dict[str, dict]:
         """列出所有键值对"""
         try:
             cursor = self._execute(f"SELECT key, value FROM {self.table_name}")
@@ -240,7 +248,7 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
             logger.error(f"Error listing all KV pairs: {str(e)}")
             raise StoreError(f"Failed to list all: {str(e)}")
 
-    def batch_set(self, items: Dict[str, Dict]) -> None:
+    def batch_set(self, items: dict[str, dict]) -> None:
         """批量设置键值对"""
         try:
             for key, value in items.items():
@@ -286,7 +294,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
         self.table_name = table_name
         self._init_table()
 
-    def _init_table(self):
+    def _init_table(self) -> None:
         """初始化表结构"""
         self._execute(
             f"""
@@ -299,7 +307,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
             """
         )
 
-    def set(self, pkey: str, skey: str, value: Dict) -> None:
+    def set(self, pkey: str, skey: str, value: dict) -> None:
         """设置键值对"""
         try:
             self._validate_key(pkey)
@@ -313,7 +321,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
             logger.error(f"Error setting KKV pair: {str(e)}")
             raise StoreError(f"Failed to set value: {str(e)}")
 
-    def get(self, pkey: str, skey: str) -> Optional[Dict]:
+    def get(self, pkey: str, skey: str) -> dict | None:
         """获取键的值"""
         try:
             self._validate_key(pkey)
@@ -363,11 +371,11 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
             logger.error(f"Error listing skeys for pkey {pkey}: {str(e)}")
             raise StoreError(f"Failed to list skeys: {str(e)}")
 
-    def list_all(self) -> Dict[str, Dict[str, Dict]]:
+    def list_all(self) -> dict[str, dict[str, dict]]:
         """列出所有键值对"""
         try:
             cursor = self._execute(f"SELECT key1, key2, value FROM {self.table_name}")
-            result: Dict[str, Dict[str, Dict]] = {}
+            result: dict[str, dict[str, dict]] = {}
             for row in cursor.fetchall():
                 key1, key2, value_json = row
                 if key1 not in result:
@@ -378,7 +386,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
             logger.error(f"Error listing all KKV pairs: {str(e)}")
             raise StoreError(f"Failed to list all: {str(e)}")
 
-    def batch_set(self, items: Dict[str, Dict[str, Dict]]) -> None:
+    def batch_set(self, items: dict[str, dict[str, dict]]) -> None:
         """批量设置键值对"""
         try:
             for pkey, skeys in items.items():
@@ -475,17 +483,17 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         result = cursor.fetchone()
         if result is None:
             raise StoreError(f"Table '{table_name}' does not exist")
-        return result[0]
+        return str(result[0])
 
     def create_kv_table(self, table_name: str) -> None:
         self._validate_table_name(table_name)
         self._execute(
-            """
-            CREATE TABLE IF NOT EXISTS {} (
+            f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             )
-        """.format(table_name)
+        """
         )
         self._add_table_info(table_name, "kv")
         logger.info(f"created KV table: {table_name} success")
@@ -493,26 +501,26 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
     def create_kkv_table(self, table_name: str) -> None:
         self._validate_table_name(table_name)
         self._execute(
-            """
-            CREATE TABLE IF NOT EXISTS {} (
+            f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
                 key1 TEXT,
                 key2 TEXT,
                 value TEXT NOT NULL,
                 PRIMARY KEY (key1, key2)
             )
-        """.format(table_name)
+        """
         )
         self._add_table_info(table_name, "kkv")
         logger.info(f"created KKV table: {table_name} success")
 
-    def get_table(self, table_name: str) -> Union[BaseKVTable, BaseKKVTable]:
+    def get_table(self, table_name: str) -> BaseKVTable | BaseKKVTable:
         self._validate_table_name(table_name)
         table_type = self._get_table_type(table_name)
         if table_type == "kv":
             return SQLiteKVTable(self.db_path, table_name)
         return SQLiteKKVTable(self.db_path, table_name)
 
-    def list_tables(self) -> Dict[str, str]:
+    def list_tables(self) -> dict[str, str]:
         cursor = self._execute(
             f"""
             SELECT name, type FROM {self.TABLE_INFO_TABLE}

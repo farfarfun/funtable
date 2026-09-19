@@ -582,6 +582,17 @@ wheels = [
 ]
 
 [[package]]
+name = "farlog"
+version = "1.1.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "loguru" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ef/33/20b1bc53d39fdabaf97be5604acdd68406a551c6cc090437ff84fc5fdcc0/farlog-1.1.8-py3-none-any.whl", hash = "sha256:03e3b8c9c76e676c41f2d24a95e59d4d5cfaf0c4b474f28c6ca76fd4860a71ca", size = 5075, upload-time = "2026-08-27T02:50:51.323Z" },
+]
+
+[[package]]
 name = "fundrive"
 version = "2.0.57"
 source = { registry = "https://pypi.org/simple" }
@@ -742,8 +753,11 @@ wheels = [
 
 [[package]]
 name = "funtable"
-version = "1.0.46"
+version = "1.0.47"
 source = { editable = "." }
+dependencies = [
+    { name = "farlog" },
+]
 
 [package.optional-dependencies]
 all = [
@@ -771,6 +785,7 @@ sqlmodel = [
 
 [package.metadata]
 requires-dist = [
+    { name = "farlog", specifier = ">=1.1.7" },
     { name = "fundrive", marker = "extra == 'snapshot'", specifier = ">=2.0.8" },
     { name = "funtable", extras = ["sqlmodel", "snapshot", "kv"], marker = "extra == 'all'" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
