@@ -23,6 +23,8 @@ from .interface import (
 
 logger = getLogger("funtable")
 
+_SQLITE_OPERATION_ERRORS = (sqlite3.Error, OSError, TypeError, ValueError)
+
 
 class _SQLiteLocal(threading.local):
     """每个线程独立保存连接和事务状态。"""
@@ -75,9 +77,11 @@ class SQLiteTableBase:
             try:
                 self._local.connection = sqlite3.connect(self.db_path)
                 self._local.connection.row_factory = sqlite3.Row
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.error(f"Failed to connect to SQLite database: {str(e)}")
-                raise StoreError(f"Database connection failed: {str(e)}")
+                raise StoreError(
+                    f"连接 SQLite 数据库失败（路径：{self.db_path}）", cause=e
+                ) from e
         return self._local.connection
 
     def _execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
@@ -89,11 +93,14 @@ class SQLiteTableBase:
             if not self._local.in_transaction:
                 self.connection.commit()
             return cursor
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"SQLite error executing {sql}: {str(e)}")
             if not self._local.in_transaction:
-                self.connection.rollback()
-            raise StoreError(f"Database operation failed: {str(e)}")
+                try:
+                    self.connection.rollback()
+                except sqlite3.Error as rollback_error:
+                    logger.error(f"SQLite 回滚失败：{rollback_error}")
+            raise StoreError(f"执行 SQLite 语句失败：{sql}", cause=e) from e
 
     def _executemany(self, sql: str, params: list[tuple]) -> sqlite3.Cursor:
         """批量执行SQL语句"""
@@ -104,10 +111,13 @@ class SQLiteTableBase:
             if not self._local.in_transaction:
                 self.connection.commit()
             return cursor
-        except Exception as e:
+        except sqlite3.Error as e:
             if not self._local.in_transaction:
-                self.connection.rollback()
-            raise StoreError(f"Database operation failed: {str(e)}")
+                try:
+                    self.connection.rollback()
+                except sqlite3.Error as rollback_error:
+                    logger.error(f"SQLite 回滚失败：{rollback_error}")
+            raise StoreError(f"批量执行 SQLite 语句失败：{sql}", cause=e) from e
 
     def close(self) -> None:
         """关闭数据库连接"""
@@ -118,13 +128,18 @@ class SQLiteTableBase:
                     self._local.connection.rollback()
                 self._local.connection.close()
                 self._local.connection = None
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.error(f"Error closing database connection: {str(e)}")
-                raise StoreError(f"Failed to close database: {str(e)}")
+                raise StoreError(
+                    f"关闭 SQLite 数据库失败（路径：{self.db_path}）", cause=e
+                ) from e
 
     def __del__(self) -> None:
         """析构函数"""
-        self.close()
+        try:
+            self.close()
+        except StoreError as e:
+            logger.warning(f"析构时关闭 SQLite 连接失败，已忽略：{e}")
 
     def begin_transaction(self) -> None:
         """开始事务"""
@@ -134,9 +149,9 @@ class SQLiteTableBase:
         try:
             self.connection.execute("BEGIN")
             self._local.in_transaction = True
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Error starting transaction: {str(e)}")
-            raise StoreError(f"Failed to start transaction: {str(e)}")
+            raise StoreError("启动 SQLite 事务失败", cause=e) from e
 
     def commit(self) -> None:
         """提交事务"""
@@ -145,9 +160,9 @@ class SQLiteTableBase:
             raise StoreError("Not in transaction")
         try:
             self.connection.commit()
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Error committing transaction: {str(e)}")
-            raise StoreError(f"Failed to commit transaction: {str(e)}")
+            raise StoreError("提交 SQLite 事务失败", cause=e) from e
         finally:
             self._local.in_transaction = False
 
@@ -158,9 +173,9 @@ class SQLiteTableBase:
             raise StoreError("Not in transaction")
         try:
             self.connection.rollback()
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Error rolling back transaction: {str(e)}")
-            raise StoreError(f"Failed to rollback transaction: {str(e)}")
+            raise StoreError("回滚 SQLite 事务失败", cause=e) from e
         finally:
             self._local.in_transaction = False
 
@@ -199,9 +214,9 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
                 f"INSERT OR REPLACE INTO {self.table_name} (key, value) VALUES (?, ?)",
                 (key, json.dumps(value)),
             )
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error setting KV pair: {str(e)}")
-            raise StoreError(f"Failed to set value: {str(e)}")
+            raise StoreError("设置 SQLite KV 数据失败", cause=e) from e
 
     def get(self, key: str) -> dict | None:
         """获取键的值"""
@@ -213,9 +228,9 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
             )
             row = cursor.fetchone()
             return json.loads(row[0]) if row else None
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error getting value for key {key}: {str(e)}")
-            raise StoreError(f"Failed to get value: {str(e)}")
+            raise StoreError(f"读取 SQLite KV 数据失败（键：{key}）", cause=e) from e
 
     def delete(self, key: str) -> bool:
         """删除键值对"""
@@ -226,27 +241,27 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
                 (key,),
             )
             return cursor.rowcount > 0
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error deleting key {key}: {str(e)}")
-            raise StoreError(f"Failed to delete value: {str(e)}")
+            raise StoreError(f"删除 SQLite KV 数据失败（键：{key}）", cause=e) from e
 
     def list_keys(self) -> list[str]:
         """列出所有键"""
         try:
             cursor = self._execute(f"SELECT key FROM {self.table_name}")
             return [row[0] for row in cursor.fetchall()]
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error listing keys: {str(e)}")
-            raise StoreError(f"Failed to list keys: {str(e)}")
+            raise StoreError("列出 SQLite KV 键失败", cause=e) from e
 
     def list_all(self) -> dict[str, dict]:
         """列出所有键值对"""
         try:
             cursor = self._execute(f"SELECT key, value FROM {self.table_name}")
             return {row[0]: json.loads(row[1]) for row in cursor.fetchall()}
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error listing all KV pairs: {str(e)}")
-            raise StoreError(f"Failed to list all: {str(e)}")
+            raise StoreError("列出 SQLite KV 数据失败", cause=e) from e
 
     def batch_set(self, items: dict[str, dict]) -> None:
         """批量设置键值对"""
@@ -259,9 +274,9 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
                 f"INSERT OR REPLACE INTO {self.table_name} (key, value) VALUES (?, ?)",
                 values,
             )
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error in batch set operation: {str(e)}")
-            raise StoreError(f"Failed to perform batch set: {str(e)}")
+            raise StoreError("批量设置 SQLite KV 数据失败", cause=e) from e
 
     def batch_delete(self, keys: list[str]) -> int:
         """批量删除键值对"""
@@ -273,9 +288,9 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
                 [(k,) for k in keys],
             )
             return cursor.rowcount
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error in batch delete operation: {str(e)}")
-            raise StoreError(f"Failed to perform batch delete: {str(e)}")
+            raise StoreError("批量删除 SQLite KV 数据失败", cause=e) from e
 
 
 class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
@@ -317,9 +332,9 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
                 f"INSERT OR REPLACE INTO {self.table_name} (key1, key2, value) VALUES (?, ?, ?)",
                 (pkey, skey, json.dumps(value)),
             )
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error setting KKV pair: {str(e)}")
-            raise StoreError(f"Failed to set value: {str(e)}")
+            raise StoreError("设置 SQLite KKV 数据失败", cause=e) from e
 
     def get(self, pkey: str, skey: str) -> dict | None:
         """获取键的值"""
@@ -332,9 +347,11 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
             )
             row = cursor.fetchone()
             return json.loads(row[0]) if row else None
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error getting value for key {pkey}, {skey}: {str(e)}")
-            raise StoreError(f"Failed to get value: {str(e)}")
+            raise StoreError(
+                f"读取 SQLite KKV 数据失败（主键：{pkey}，次键：{skey}）", cause=e
+            ) from e
 
     def delete(self, pkey: str, skey: str) -> bool:
         """删除键值对"""
@@ -346,18 +363,20 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
                 (pkey, skey),
             )
             return cursor.rowcount > 0
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error deleting key {pkey}, {skey}: {str(e)}")
-            raise StoreError(f"Failed to delete value: {str(e)}")
+            raise StoreError(
+                f"删除 SQLite KKV 数据失败（主键：{pkey}，次键：{skey}）", cause=e
+            ) from e
 
     def list_pkeys(self) -> list[str]:
         """列出所有主键"""
         try:
             cursor = self._execute(f"SELECT DISTINCT key1 FROM {self.table_name}")
             return [row[0] for row in cursor.fetchall()]
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error listing pkeys: {str(e)}")
-            raise StoreError(f"Failed to list pkeys: {str(e)}")
+            raise StoreError("列出 SQLite KKV 主键失败", cause=e) from e
 
     def list_skeys(self, pkey: str) -> list[str]:
         """列出所有次键"""
@@ -367,9 +386,9 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
                 (pkey,),
             )
             return [row[0] for row in cursor.fetchall()]
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error listing skeys for pkey {pkey}: {str(e)}")
-            raise StoreError(f"Failed to list skeys: {str(e)}")
+            raise StoreError(f"列出 SQLite KKV 次键失败（主键：{pkey}）", cause=e) from e
 
     def list_all(self) -> dict[str, dict[str, dict]]:
         """列出所有键值对"""
@@ -382,9 +401,9 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
                     result[key1] = {}
                 result[key1][key2] = json.loads(value_json)
             return result
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error listing all KKV pairs: {str(e)}")
-            raise StoreError(f"Failed to list all: {str(e)}")
+            raise StoreError("列出 SQLite KKV 数据失败", cause=e) from e
 
     def batch_set(self, items: dict[str, dict[str, dict]]) -> None:
         """批量设置键值对"""
@@ -403,9 +422,9 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
                 f"INSERT OR REPLACE INTO {self.table_name} (key1, key2, value) VALUES (?, ?, ?)",
                 values,
             )
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error in batch set operation: {str(e)}")
-            raise StoreError(f"Failed to perform batch set: {str(e)}")
+            raise StoreError("批量设置 SQLite KKV 数据失败", cause=e) from e
 
     def batch_delete(self, items: list[tuple[str, str]]) -> int:
         """批量删除键值对"""
@@ -418,9 +437,9 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
                 items,
             )
             return cursor.rowcount
-        except Exception as e:
+        except _SQLITE_OPERATION_ERRORS as e:
             logger.error(f"Error in batch delete operation: {str(e)}")
-            raise StoreError(f"Failed to perform batch delete: {str(e)}")
+            raise StoreError("批量删除 SQLite KKV 数据失败", cause=e) from e
 
 
 class SQLiteStore(SQLiteTableBase, BaseDB):

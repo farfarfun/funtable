@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from hashlib import md5
 from typing import Any, TypeVar
 
@@ -11,18 +11,23 @@ logger = getLogger("funtable")
 T = TypeVar("T", bound="BaseModel")
 
 
+def _utc_now() -> datetime:
+    """返回带 UTC 时区信息的当前时间。"""
+    return datetime.now(timezone.utc)
+
+
 class BaseModel(SQLModel):
     """提供常用查询、写入和唯一标识能力的 SQLModel 基类。"""
 
     id: int | None = Field(description="自增ID", default=None, primary_key=True)
     uid: str | None = Field(description="唯一ID", default="", unique=True)
     gmt_create: datetime | None = Field(
-        description="创建时间", default_factory=datetime.now
+        description="创建时间", default_factory=_utc_now
     )
     gmt_modified: datetime | None = Field(
         description="修改时间",
-        default_factory=datetime.now,
-        sa_column_kwargs={"onupdate": datetime.now},
+        default_factory=_utc_now,
+        sa_column_kwargs={"onupdate": _utc_now},
     )
 
     @classmethod

@@ -242,7 +242,7 @@ except StoreError as e:
 
 1. Fork 仓库
 2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
+3. 使用 `<类型>: <做了什么及原因>` 格式提交更改（例如 `git commit -m 'feat: 增加批量查询以减少数据库往返'`）
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 打开 Pull Request
 

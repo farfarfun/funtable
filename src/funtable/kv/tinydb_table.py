@@ -27,12 +27,14 @@ from .interface import (
 
 logger = getLogger("funtable")
 
+_TINYDB_OPERATION_ERRORS = (OSError, TypeError, ValueError)
+
 
 class TinyDBTableBase:
     """TinyDB表基类"""
 
     _db_instances: dict[str, TinyDB] = {}
-    # ponytail: one process-wide lock; use per-path locks if throughput matters.
+    # 当前使用进程级锁；如需提高吞吐量，可按数据库路径拆分锁。
     _lock = threading.RLock()
 
     def __init__(self, db_path: str):
@@ -47,9 +49,9 @@ class TinyDBTableBase:
                 if self.db_path not in self._db_instances:
                     self._db_instances[self.db_path] = TinyDB(self.db_path)
                 return self._db_instances[self.db_path]
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to connect to TinyDB database: {str(e)}")
-            raise StoreError(f"Database connection failed: {str(e)}")
+            raise StoreError(f"连接 TinyDB 数据库失败（路径：{self.db_path}）", cause=e) from e
 
     @classmethod
     def _close_db(cls, db_path: str) -> None:
@@ -62,16 +64,16 @@ class TinyDBTableBase:
         """关闭数据库连接"""
         try:
             self._close_db(self.db_path)
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error closing database connection: {str(e)}")
-            raise StoreError(f"Failed to close database: {str(e)}")
+            raise StoreError(f"关闭 TinyDB 数据库失败（路径：{self.db_path}）", cause=e) from e
 
     def __del__(self) -> None:
         """析构函数"""
         try:
             self.close()
-        except Exception:
-            pass
+        except StoreError as e:
+            logger.warning(f"析构时关闭 TinyDB 连接失败，已忽略：{e}")
 
     def begin_transaction(self) -> None:
         raise StoreError("TinyDB does not support transactions")
@@ -132,9 +134,9 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
                     self.query.key == key,
                 )
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error setting KV pair: {str(e)}")
-            raise StoreError(f"Failed to set value: {str(e)}")
+            raise StoreError(f"设置 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def get(self, key: str) -> dict | None:
         """获取键值对"""
@@ -147,9 +149,9 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
                 )
                 return cast(dict[str, Any], result["value"]) if result else None
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error getting value: {str(e)}")
-            raise StoreError(f"Failed to get value: {str(e)}")
+            raise StoreError(f"读取 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def delete(self, key: str) -> bool:
         """删除键值对"""
@@ -159,9 +161,9 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
             with self._lock:
                 return len(self.table.remove(self.query.key == key)) > 0
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error deleting KV pair: {str(e)}")
-            raise StoreError(f"Failed to delete value: {str(e)}")
+            raise StoreError(f"删除 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def batch_set(self, items: dict[str, dict]) -> None:
         """批量设置键值对"""
@@ -175,9 +177,9 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
                         {"key": key, "value": value}, self.query.key == key
                     )
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error in batch set operation: {str(e)}")
-            raise StoreError(f"Failed to perform batch set: {str(e)}")
+            raise StoreError(f"批量设置 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def batch_delete(self, keys: list[str]) -> int:
         """批量删除键值对"""
@@ -187,9 +189,9 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
             with self._lock:
                 return len(self.table.remove(self.query.key.one_of(keys)))
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error in batch delete operation: {str(e)}")
-            raise StoreError(f"Failed to perform batch delete: {str(e)}")
+            raise StoreError(f"批量删除 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def list_keys(self) -> list[str]:
         """获取所有键列表
@@ -245,9 +247,9 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
                     (self.query.key1 == key1) & (self.query.key2 == key2),
                 )
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error setting KKV pair: {str(e)}")
-            raise StoreError(f"Failed to set value: {str(e)}")
+            raise StoreError(f"设置 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def get(self, key1: str, key2: str) -> dict | None:
         """获取键值对"""
@@ -264,9 +266,9 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
                 )
                 return cast(dict[str, Any], result["value"]) if result else None
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error getting value: {str(e)}")
-            raise StoreError(f"Failed to get value: {str(e)}")
+            raise StoreError(f"读取 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def delete(self, key1: str, key2: str) -> bool:
         """删除键值对"""
@@ -284,9 +286,9 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
                     > 0
                 )
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error deleting KKV pair: {str(e)}")
-            raise StoreError(f"Failed to delete value: {str(e)}")
+            raise StoreError(f"删除 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def batch_set(self, items: dict[str, dict[str, dict]]) -> None:
         """批量设置键值对
@@ -308,9 +310,9 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
                             (self.query.key1 == pkey) & (self.query.key2 == skey),
                         )
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error in batch set operation: {str(e)}")
-            raise StoreError(f"Failed to perform batch set: {str(e)}")
+            raise StoreError(f"批量设置 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def batch_delete(self, items: list[tuple[str, str]]) -> int:
         """批量删除键值对
@@ -332,9 +334,9 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
                     )
             return deleted
 
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Error in batch delete operation: {str(e)}")
-            raise StoreError(f"Failed to perform batch delete: {str(e)}")
+            raise StoreError(f"批量删除 TinyDB 数据失败（表：{self.table_name}）", cause=e) from e
 
     def list_pkeys(self) -> list[str]:
         """获取所有第一级键列表"""
@@ -379,9 +381,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
             self._table_info_path = os.path.join(db_dir, ".table_info")
             super().__init__(self._table_info_path)
             self._init_table_info_table()
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to initialize TinyDBStore: {str(e)}")
-            raise StoreError(f"Store initialization failed: {str(e)}")
+            raise StoreError(f"初始化 TinyDB 存储失败（目录：{db_dir}）", cause=e) from e
 
     def _init_table_info_table(self) -> None:
         """初始化存储表信息表"""
@@ -391,9 +393,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
                 if not table.all():
                     logger.info("Initializing table info storage")
                     table.insert({"created_at": datetime.now().isoformat()})
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to initialize table info: {str(e)}")
-            raise StoreError(f"Table info initialization failed: {str(e)}")
+            raise StoreError("初始化 TinyDB 表信息失败", cause=e) from e
 
     def _add_table_info(self, table_name: str, table_type: str) -> None:
         """添加或更新存储表信息"""
@@ -409,9 +411,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
                     Query().name == table_name,
                 )
             logger.info(f"Added/updated table info: {table_name} ({table_type})")
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to add/update table info: {str(e)}")
-            raise StoreError(f"Failed to update table info: {str(e)}")
+            raise StoreError(f"更新 TinyDB 表信息失败（表：{table_name}）", cause=e) from e
 
     def _remove_table_info(self, table_name: str) -> None:
         """删除存储表信息"""
@@ -420,9 +422,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
                 table = self.db.table(self.TABLE_INFO_TABLE)
                 table.remove(Query().name == table_name)
             logger.info(f"Removed table info: {table_name}")
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to remove table info: {str(e)}")
-            raise StoreError(f"Failed to remove table info: {str(e)}")
+            raise StoreError(f"删除 TinyDB 表信息失败（表：{table_name}）", cause=e) from e
 
     def _get_table_type(self, table_name: str) -> str:
         """获取存储表类型"""
@@ -437,9 +439,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
                 return str(result["type"])
         except StoreError:
             raise
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to get table type: {str(e)}")
-            raise StoreError(f"Failed to get table type: {str(e)}")
+            raise StoreError(f"读取 TinyDB 表类型失败（表：{table_name}）", cause=e) from e
 
     def _get_db_path(self, table_name: str) -> str:
         """获取存储表的数据库文件路径"""
@@ -469,9 +471,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
             logger.info(f"Created KV table: {table_name}")
         except StoreError:
             raise
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to create KV table: {str(e)}")
-            raise StoreError(f"Failed to create table: {str(e)}")
+            raise StoreError(f"创建 TinyDB 表失败（表：{table_name}）", cause=e) from e
 
     def create_kkv_table(self, table_name: str) -> None:
         """创建新的KKV存储表"""
@@ -486,9 +488,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
             logger.info(f"Created KKV table: {table_name}")
         except StoreError:
             raise
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to create KKV table: {str(e)}")
-            raise StoreError(f"Failed to create table: {str(e)}")
+            raise StoreError(f"创建 TinyDB 表失败（表：{table_name}）", cause=e) from e
 
     def get_table(self, table_name: str) -> TinyDBKVTable | TinyDBKKVTable:
         """获取指定的存储表接口"""
@@ -508,9 +510,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
                 raise StoreError(f"Invalid table type: {table_type}")
         except StoreError:
             raise
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to get table: {str(e)}")
-            raise StoreError(f"Failed to get table: {str(e)}")
+            raise StoreError(f"获取 TinyDB 表失败（表：{table_name}）", cause=e) from e
 
     def list_tables(self) -> dict[str, str]:
         """获取所有表名列表"""
@@ -520,9 +522,9 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
                 return {
                     doc["name"]: doc["type"] for doc in table.all() if "name" in doc
                 }
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to list tables: {str(e)}")
-            raise StoreError(f"Failed to list tables: {str(e)}")
+            raise StoreError("列出 TinyDB 表失败", cause=e) from e
 
     def drop_table(self, table_name: str) -> None:
         """删除指定的存储表"""
@@ -538,6 +540,6 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
             logger.info(f"Dropped table: {table_name}")
         except StoreError:
             raise
-        except Exception as e:
+        except _TINYDB_OPERATION_ERRORS as e:
             logger.error(f"Failed to drop table: {str(e)}")
-            raise StoreError(f"Failed to drop table: {str(e)}")
+            raise StoreError(f"删除 TinyDB 表失败（表：{table_name}）", cause=e) from e

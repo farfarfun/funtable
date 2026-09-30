@@ -1,10 +1,13 @@
 import os
+import sqlite3
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from logging import getLogger
-from typing import Dict
+from unittest.mock import patch
+
+from farlog import getLogger
 
 from funtable.kv import SQLiteKVTable, SQLiteStore, StoreError
+from funtable.kv.sqlite_table import SQLiteTableBase
 
 try:
     from funtable.kv import TinyDBStore
@@ -129,7 +132,7 @@ class TestSQLiteStore(unittest.TestCase):
         self.assertIsNone(kv_table.get(key))
 
         # 测试列表操作
-        test_data: Dict[str, Dict] = {
+        test_data: dict[str, dict] = {
             "key1": {"name": "test1"},
             "key2": {"name": "test2"},
         }
@@ -180,7 +183,7 @@ class TestSQLiteStore(unittest.TestCase):
         self.assertIsNone(kkv_table.get(pkey, skey))
 
         # 测试列表操作
-        test_data: Dict[str, Dict[str, Dict]] = {
+        test_data: dict[str, dict[str, dict]] = {
             "user1": {
                 "profile": {"name": "test1"},
                 "settings": {"theme": "dark"},
@@ -216,6 +219,19 @@ class TestSQLiteStore(unittest.TestCase):
 
         self.assertEqual(table.get("keep"), {"value": 1})
         self.assertIsNone(table.get("rollback"))
+
+    def test_connection_error_keeps_cause_and_path(self):
+        """连接异常转换后保留原始原因和数据库路径。"""
+        table = SQLiteTableBase("broken.db")
+        cause = sqlite3.OperationalError("database is locked")
+
+        with patch("sqlite3.connect", side_effect=cause):
+            with self.assertRaises(StoreError) as raised:
+                _ = table.connection
+
+        self.assertIs(raised.exception.cause, cause)
+        self.assertIs(raised.exception.__cause__, cause)
+        self.assertIn("broken.db", str(raised.exception))
 
 
 @unittest.skipIf(TinyDBStore is None, "tinydb is not installed")
@@ -314,7 +330,7 @@ class TestTinyDBStore(unittest.TestCase):
         self.assertIsNone(kv_table.get(key))
 
         # 测试列表操作
-        test_data: Dict[str, Dict] = {
+        test_data: dict[str, dict] = {
             "key1": {"name": "test1"},
             "key2": {"name": "test2"},
         }
@@ -351,7 +367,7 @@ class TestTinyDBStore(unittest.TestCase):
         self.assertIsNone(kkv_table.get(pkey, skey))
 
         # 测试列表操作
-        test_data: Dict[str, Dict[str, Dict]] = {
+        test_data: dict[str, dict[str, dict]] = {
             "user1": {
                 "profile": {"name": "test1"},
                 "settings": {"theme": "dark"},
