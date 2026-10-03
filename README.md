@@ -2,7 +2,7 @@
 
 [![PyPI version](https://badge.fury.io/py/funtable.svg)](https://badge.fury.io/py/funtable)
 [![Python](https://img.shields.io/pypi/pyversions/funtable.svg)](https://pypi.org/project/funtable/)
-[![License](https://img.shields.io/github/license/farfarfun/funtable.svg)](https://github.com/farfarfun/funtable/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/farfarfun/funtable.svg)](https://github.com/farfarfun/funtable/blob/master/LICENSE)
 
 一个统一的表存储抽象库，为各种存储后端（包括 SQLite、TinyDB、SQLModel 和云存储快照）提供一致的接口。
 
@@ -105,6 +105,12 @@ print(skeys)  # ["profile", "settings"]
 事务仅适用于 SQLite 后端。
 
 ```python
+from funtable.kv import SQLiteStore
+
+db = SQLiteStore("my_database.db")
+db.create_kv_table("users")
+table = db.get_table("users")
+
 # 使用事务确保数据一致性
 table.begin_transaction()
 try:
@@ -128,6 +134,10 @@ class User(BaseModel, table=True):
     name: str = Field(description="用户名")
     email: str = Field(description="用户邮箱")
     age: int = Field(description="用户年龄")
+
+    def unique_str(self) -> str:
+        """用邮箱生成稳定的唯一标识（uid）。"""
+        return self.email
 
 
 # BaseModel 提供内置字段:
@@ -155,10 +165,11 @@ with Session(engine) as session:
 
 ```python
 from funtable.snapshot import DriveSnapshot
-from fundrive import SomeDriveImplementation
+from fundrive import get_drive
 
-# 初始化驱动器和快照管理器
-drive = SomeDriveImplementation()
+# 初始化驱动器和快照管理器（示例使用本地文件系统驱动，无需额外凭据；
+# 生产环境可换成 get_drive("alipan"/"baidu"/... ) 等实际云盘驱动）
+drive = get_drive("os")
 snapshot = DriveSnapshot(
     table_fid="my-table-id",
     drive=drive,

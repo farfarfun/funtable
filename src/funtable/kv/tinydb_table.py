@@ -76,12 +76,15 @@ class TinyDBTableBase:
             logger.warning(f"析构时关闭 TinyDB 连接失败，已忽略：{e}")
 
     def begin_transaction(self) -> None:
+        """TinyDB 不支持事务，调用即抛出 ``StoreError``。"""
         raise StoreError("TinyDB does not support transactions")
 
     def commit(self) -> None:
+        """TinyDB 不支持事务，调用即抛出 ``StoreError``。"""
         raise StoreError("TinyDB does not support transactions")
 
     def rollback(self) -> None:
+        """TinyDB 不支持事务，调用即抛出 ``StoreError``。"""
         raise StoreError("TinyDB does not support transactions")
 
     def _validate_key(self, key: str) -> None:

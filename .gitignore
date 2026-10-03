@@ -6,6 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
+# 生成物与运行时文件（SPEC.md §10）
+*.db
+*.rar
+.run/
+logs/
+.vscode/
+
 # Distribution / packaging
 .Python
 build/

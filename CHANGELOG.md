@@ -1,5 +1,17 @@
 # Changelog
 
+## 未发布
+
+### 修复
+
+- 补全 `SQLiteStore`（`create_kv_table`/`create_kkv_table`/`get_table`/`list_tables`/`drop_table`）
+  和 `TinyDBTableBase`（`begin_transaction`/`commit`/`rollback`）的中文 docstring。
+- 修正 README：事务示例改为自带 KV 表初始化，不再复用前文 KKV 表导致签名不匹配；
+  SQLModel 示例补上 `unique_str` 实现，使示例可实例化；快照示例改用
+  `fundrive.get_drive("os")` 等实际存在的驱动，不再引用不存在的 `SomeDriveImplementation`；
+  许可证徽章链接分支从 `main` 改为实际默认分支 `master`。
+- `.gitignore` 补充 `*.db`、`*.rar`、`.run/`、`logs/`、`.vscode/`，覆盖测试产生的数据库文件等生成物。
+
 ## 1.0.47
 
 ### 新增

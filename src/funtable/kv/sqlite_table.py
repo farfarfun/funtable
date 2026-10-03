@@ -505,6 +505,13 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         return str(result[0])
 
     def create_kv_table(self, table_name: str) -> None:
+        """创建名为 ``table_name`` 的单键表。
+
+        Args:
+            table_name: 表名，只能以字母开头、仅含字母数字下划线。
+
+        表已存在时直接复用（``CREATE TABLE IF NOT EXISTS``），不会报错。
+        """
         self._validate_table_name(table_name)
         self._execute(
             f"""
@@ -518,6 +525,13 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         logger.info(f"created KV table: {table_name} success")
 
     def create_kkv_table(self, table_name: str) -> None:
+        """创建名为 ``table_name`` 的双键表。
+
+        Args:
+            table_name: 表名，只能以字母开头、仅含字母数字下划线。
+
+        表已存在时直接复用（``CREATE TABLE IF NOT EXISTS``），不会报错。
+        """
         self._validate_table_name(table_name)
         self._execute(
             f"""
@@ -533,6 +547,17 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         logger.info(f"created KKV table: {table_name} success")
 
     def get_table(self, table_name: str) -> BaseKVTable | BaseKKVTable:
+        """返回指定表的操作对象。
+
+        Args:
+            table_name: 表名。
+
+        Returns:
+            根据表登记的类型返回 ``SQLiteKVTable`` 或 ``SQLiteKKVTable``。
+
+        Raises:
+            StoreError: 表不存在时抛出。
+        """
         self._validate_table_name(table_name)
         table_type = self._get_table_type(table_name)
         if table_type == "kv":
@@ -540,6 +565,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         return SQLiteKKVTable(self.db_path, table_name)
 
     def list_tables(self) -> dict[str, str]:
+        """返回 ``表名 -> 表类型`` 映射，按表名排序。"""
         cursor = self._execute(
             f"""
             SELECT name, type FROM {self.TABLE_INFO_TABLE}
@@ -549,6 +575,14 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
         return {row[0]: row[1] for row in cursor.fetchall()}
 
     def drop_table(self, table_name: str) -> None:
+        """删除指定表及其登记信息。
+
+        Args:
+            table_name: 表名。
+
+        Raises:
+            StoreError: 表不存在时抛出。
+        """
         self._validate_table_name(table_name)
         self._get_table_type(table_name)
         self._execute(f"DROP TABLE IF EXISTS {table_name}")
