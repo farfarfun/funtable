@@ -37,7 +37,7 @@ class TinyDBTableBase:
     # 当前使用进程级锁；如需提高吞吐量，可按数据库路径拆分锁。
     _lock = threading.RLock()
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str) -> None:
         """初始化TinyDB连接"""
         self.db_path = db_path
 
@@ -114,7 +114,7 @@ class TinyDBKVTable(TinyDBTableBase, BaseKVTable):
     }
     """
 
-    def __init__(self, table_name: str, db_path: str):
+    def __init__(self, table_name: str, db_path: str) -> None:
         """初始化TinyDB KV表"""
         TinyDBTableBase.__init__(self, db_path)
         self.table_name = table_name
@@ -226,7 +226,7 @@ class TinyDBKKVTable(TinyDBTableBase, BaseKKVTable):
     }
     """
 
-    def __init__(self, table_name: str, db_path: str):
+    def __init__(self, table_name: str, db_path: str) -> None:
         """初始化TinyDB KKV表"""
         TinyDBTableBase.__init__(self, db_path)
         self.table_name = table_name
@@ -370,7 +370,7 @@ class TinyDBStore(TinyDBTableBase, BaseDB):
 
     TABLE_INFO_TABLE = "table_info"
 
-    def __init__(self, db_dir: str = "tinydb_store"):
+    def __init__(self, db_dir: str = "tinydb_store") -> None:
         """初始化TinyDB存储
 
         Args:

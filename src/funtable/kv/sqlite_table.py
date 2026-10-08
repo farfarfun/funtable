@@ -37,7 +37,7 @@ class _SQLiteLocal(threading.local):
 class SQLiteTableBase:
     """SQLite表基类"""
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str) -> None:
         """初始化SQLite连接"""
         self.db_path = db_path
         self._local = _SQLiteLocal()
@@ -188,7 +188,7 @@ class SQLiteKVTable(SQLiteTableBase, BaseKVTable):
     - value: TEXT NOT NULL   # JSON序列化的字典值
     """
 
-    def __init__(self, db_path: str, table_name: str):
+    def __init__(self, db_path: str, table_name: str) -> None:
         super().__init__(db_path)
         self._validate_table_name(table_name)
         self.table_name = table_name
@@ -303,7 +303,7 @@ class SQLiteKKVTable(SQLiteTableBase, BaseKKVTable):
     - PRIMARY KEY (key1, key2)
     """
 
-    def __init__(self, db_path: str, table_name: str):
+    def __init__(self, db_path: str, table_name: str) -> None:
         super().__init__(db_path)
         self._validate_table_name(table_name)
         self.table_name = table_name
@@ -447,7 +447,7 @@ class SQLiteStore(SQLiteTableBase, BaseDB):
 
     TABLE_INFO_TABLE = "_table_info"  # 存储表信息的表名
 
-    def __init__(self, db_path: str = "sqlite_store.db"):
+    def __init__(self, db_path: str = "sqlite_store.db") -> None:
         """初始化SQLite存储
 
         Args:

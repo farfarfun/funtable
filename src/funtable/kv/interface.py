@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 class StoreError(Exception):
     """存储后端操作失败。"""
 
-    def __init__(self, message: str, cause: Exception | None = None):
+    def __init__(self, message: str, cause: Exception | None = None) -> None:
         super().__init__(message)
         self.message = message
         self.cause = cause

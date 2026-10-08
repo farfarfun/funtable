@@ -17,6 +17,8 @@
 
 ## 安装
 
+本项目支持 Python 3.10 及更高版本。
+
 ### 基础安装
 
 ```bash
@@ -37,6 +39,16 @@ pip install funtable[kv]
 
 # 安装所有可选依赖
 pip install funtable[sqlmodel,snapshot,kv]
+```
+
+## 开发
+
+```bash
+pip install -e ".[dev,all]" build
+pytest
+ruff check .
+mypy src
+python -m build
 ```
 
 ## 快速开始

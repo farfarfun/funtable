@@ -101,6 +101,46 @@ class TestDriveSnapshot(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Unsafe snapshot name"):
                 snapshot.download(destination)
 
+    def test_download_restores_latest_snapshot_and_cleans_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "data.txt").write_text("snapshot", encoding="utf-8")
+            archive = root / "snapshot-20240102.tar.xz"
+            DriveSnapshot._archive(source, archive)
+
+            class FakeDrive:
+                def __init__(self, archive_path):
+                    self.archive_path = archive_path
+                    self.downloads = []
+
+                def download_file(self, fid, destination, overwrite=False):
+                    self.downloads.append((fid, destination, overwrite))
+                    (Path(destination) / self.archive_path.name).write_bytes(
+                        self.archive_path.read_bytes()
+                    )
+
+            destination = root / "restored"
+            drive = FakeDrive(archive)
+            snapshot = DriveSnapshot.__new__(DriveSnapshot)
+            snapshot.drive = drive
+            snapshot.table = SimpleNamespace(
+                partition_meta=lambda: [
+                    {"name": archive.name, "fid": "latest"},
+                    {"name": "snapshot-20240101.tar.xz", "fid": "older"},
+                ]
+            )
+
+            snapshot.download(destination)
+
+            self.assertEqual(drive.downloads, [("latest", str(destination), True)])
+            self.assertEqual(
+                (destination / "source" / "data.txt").read_text(encoding="utf-8"),
+                "snapshot",
+            )
+            self.assertFalse((destination / archive.name).exists())
+
     def test_update_cleans_archive_and_keeps_exact_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "data.txt"
